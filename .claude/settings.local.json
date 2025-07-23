@@ -22,7 +22,10 @@
       "Bash(timeout 10s npm start)",
       "Bash(timeout 8s npm start)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(mkdir:*)",
+      "Bash(copy:*)",
+      "Bash(cp:*)"
     ],
     "deny": []
   }
