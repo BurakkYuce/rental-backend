@@ -13,6 +13,9 @@ exports.protect = async (req, res, next) => {
       req.headers.authorization.startsWith("Bearer")
     ) {
       token = req.headers.authorization.split(" ")[1];
+      console.log("🔑 Token extracted:", token ? "Present" : "Missing");
+    } else {
+      console.log("🚫 No Authorization header or doesn't start with Bearer");
     }
 
     // Check if token exists

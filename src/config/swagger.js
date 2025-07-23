@@ -20,7 +20,7 @@ const options = {
     },
     servers: [
       {
-        url: "http://localhost:5000",
+        url: "http://localhost:4000",
         description: "Development server",
       },
       {
@@ -34,6 +34,7 @@ const options = {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
+          description: "Enter JWT Bearer token"
         },
       },
       schemas: {
@@ -386,10 +387,97 @@ const options = {
             },
           },
         },
+        News: {
+          type: "object",
+          properties: {
+            _id: {
+              type: "string",
+              description: "News ID"
+            },
+            title: {
+              type: "string",
+              description: "News title",
+              example: "New Car Model Available"
+            },
+            content: {
+              type: "string",
+              description: "News content"
+            },
+            excerpt: {
+              type: "string",
+              description: "News excerpt"
+            },
+            author: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                email: { type: "string" }
+              }
+            },
+            status: {
+              type: "string",
+              enum: ["draft", "published", "archived"],
+              example: "published"
+            },
+            publishedAt: {
+              type: "string",
+              format: "date-time"
+            }
+          }
+        },
+        Booking: {
+          type: "object",
+          properties: {
+            _id: {
+              type: "string",
+              description: "Booking ID"
+            },
+            carId: {
+              type: "string",
+              description: "Car ID"
+            },
+            customerName: {
+              type: "string",
+              example: "John Doe"
+            },
+            customerEmail: {
+              type: "string",
+              example: "john@example.com"
+            },
+            startDate: {
+              type: "string",
+              format: "date",
+              example: "2025-01-01"
+            },
+            endDate: {
+              type: "string",
+              format: "date",
+              example: "2025-01-07"
+            },
+            totalAmount: {
+              type: "number",
+              example: 350
+            },
+            status: {
+              type: "string",
+              enum: ["pending", "confirmed", "active", "completed", "cancelled"],
+              example: "confirmed"
+            }
+          }
+        },
       },
     },
+    security: [
+      {
+        bearerAuth: []
+      }
+    ]
   },
-  apis: ["./src/routes/*.js", "./src/controllers/*.js"],
+  apis: [
+    "./src/routes/*.js", 
+    "./src/controllers/*.js",
+    "./src/controllers/allApis.js"
+  ],
 };
 
 const specs = swaggerJsdoc(options);

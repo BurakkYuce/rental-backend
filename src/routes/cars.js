@@ -22,8 +22,17 @@ const {
   exportCars,
 } = require("../controllers/carController");
 
+// Note: Some admin car functions from allApis.js are not yet fully migrated
+// Using existing carController functions as alternatives
+
+// Import locations from adminController
+const {
+  getLocations,
+} = require("../controllers/adminController");
+
 const { upload } = require("../utils/cloudinary");
 const { protect, restrictTo } = require("../middleware/auth");
+const { body, query } = require("express-validator");
 const {
   validateCar,
   validateCarUpdate,
@@ -207,6 +216,28 @@ router.get("/:id", validateId, getCar);
 router.get("/:id/similar", validateId, getSimilarCars);
 router.get("/:id/whatsapp", validateId, generateWhatsAppLink);
 
+// ===== ADDITIONAL CAR ROUTES FROM ALLAPIS =====
+
+// TODO: Migrate these functions from allApis.js to carController.js
+// Get filtered cars with pagination - TEMPORARILY DISABLED
+// router.get("/filtered", getFilteredCars);
+
+// Get filter options - TEMPORARILY DISABLED  
+// router.get("/filter-options", getFilterOptions);
+
+// Get single car details by ID or slug (alternative endpoint)
+router.get("/details/:id", getCar);
+
+// TODO: These routes are temporarily disabled until functions are migrated
+// Check car availability - TEMPORARILY DISABLED
+// router.get("/:carId/availability", checkCarAvailability);
+
+// Toggle car like - TEMPORARILY DISABLED  
+// router.post("/:carId/toggle-like", protect, toggleCarLike);
+
+// Get all locations
+router.get("/locations", getLocations);
+
 // Protected routes (Admin only)
 router.use(protect);
 router.use(restrictTo("admin", "super_admin"));
@@ -234,5 +265,12 @@ router.patch("/bulk", bulkUpdateCars);
 // Statistics and export
 router.get("/admin/stats", getCarStatistics);
 router.get("/admin/export", exportCars);
+
+// ===== ADDITIONAL ADMIN CAR ROUTES FROM ALLAPIS =====
+// TODO: These admin routes are temporarily disabled until functions are fully migrated
+
+// All admin routes from allApis.js are temporarily disabled
+// They need to be properly migrated to carController.js with all their functions
+// For now, use the existing car routes above for basic car management
 
 module.exports = router;

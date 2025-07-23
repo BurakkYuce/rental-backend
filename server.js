@@ -14,6 +14,10 @@ const authRoutes = require("./src/routes/auth");
 const carRoutes = require("./src/routes/cars");
 const bookingRoutes = require("./src/routes/bookings");
 const userRoutes = require("./src/routes/users");
+const contentRoutes = require("./src/routes/content");
+const uploadRoutes = require("./src/routes/upload");
+const adminRoutes = require("./src/routes/admin");
+const blogRoutes = require("./src/routes/blog");
 
 // Express app oluştur
 const app = express();
@@ -21,13 +25,42 @@ const app = express();
 // Middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:3000",
+      "http://localhost:5173",
+    ],
     credentials: true,
   })
 );
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Request/Response logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+
+  // Log request
+  console.log(`\n🔵 ${req.method} ${req.url}`);
+  console.log(`📤 Headers:`, JSON.stringify(req.headers, null, 2));
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log(`📤 Body:`, JSON.stringify(req.body, null, 2));
+  }
+
+  // Store original res.json to intercept response
+  const originalJson = res.json;
+  res.json = function (body) {
+    const duration = Date.now() - start;
+    console.log(
+      `📥 Response [${res.statusCode}] (${duration}ms):`,
+      JSON.stringify(body, null, 2)
+    );
+    console.log(`${"=".repeat(80)}`);
+    return originalJson.call(this, body);
+  };
+
+  next();
+});
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
@@ -48,6 +81,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/cars", carRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api", contentRoutes);
+app.use("/api/upload", uploadRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/blogs", blogRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

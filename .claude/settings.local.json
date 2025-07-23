@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run dev:*)",
+      "Bash(npm install:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd /c:*)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(where mongodbcompass)",
+      "Bash(wc:*)",
+      "Bash(node:*)",
+      "Bash(timeout 10 npm run dev)",
+      "Bash(npm run build:*)",
+      "Bash(npm start)",
+      "Bash(npm run:*)",
+      "Bash(curl:*)",
+      "Bash(tail:*)",
+      "Bash(grep:*)",
+      "Bash(rm:*)",
+      "Bash(ls:*)",
+      "Bash(timeout 10s npm start)",
+      "Bash(timeout 8s npm start)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
+    ],
+    "deny": []
+  }
+}

@@ -160,8 +160,33 @@ const carSchema = new mongoose.Schema(
         "Otobüs",
         "Kamyonet",
         "Kamyon",
+        "Convertible",
+        "Coupe",
+        "Exotic Cars",
+        "Truck",
+        "Sports Car",
+        "SUV",
       ],
       default: "Belirtilmemiş",
+    },
+
+    // Additional fields for frontend compatibility
+    seats: {
+      type: Number,
+      default: 5,
+      min: [2, "Seats cannot be less than 2"],
+      max: [50, "Seats cannot be more than 50"],
+    },
+    doors: {
+      type: Number,
+      default: 4,
+      min: [2, "Doors cannot be less than 2"],
+      max: [6, "Doors cannot be more than 6"],
+    },
+    engineCapacity: {
+      type: Number,
+      min: [500, "Engine capacity cannot be less than 500cc"],
+      max: [10000, "Engine capacity cannot be more than 10000cc"],
     },
 
     // Yaş ve Ehliyet Gereksinimleri
@@ -213,6 +238,36 @@ const carSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
       index: true,
+    },
+
+    // Inventory Management
+    inventory: {
+      totalUnits: {
+        type: Number,
+        default: 1,
+        min: [0, "Total units cannot be negative"],
+        required: [true, "Total units is required"],
+      },
+      availableUnits: {
+        type: Number,
+        default: 1,
+        min: [0, "Available units cannot be negative"],
+      },
+      rentedUnits: {
+        type: Number,
+        default: 0,
+        min: [0, "Rented units cannot be negative"],
+      },
+      maintenanceUnits: {
+        type: Number,
+        default: 0,
+        min: [0, "Maintenance units cannot be negative"],
+      },
+      outOfServiceUnits: {
+        type: Number,
+        default: 0,
+        min: [0, "Out of service units cannot be negative"],
+      },
     },
 
     // Fiyatlandırma - Genel
@@ -418,6 +473,19 @@ carSchema.virtual("whatsappLink").get(function () {
   return `https://wa.me/${cleanNumber}?text=${message}`;
 });
 
+// Virtual for availability status
+carSchema.virtual("availabilityStatus").get(function () {
+  const { totalUnits, availableUnits, rentedUnits } = this.inventory;
+
+  if (availableUnits === 0) {
+    return "Fully Booked";
+  } else if (availableUnits <= totalUnits * 0.2) {
+    return "Limited Availability";
+  } else {
+    return "Available";
+  }
+});
+
 // Virtual for current price (seasonal check)
 carSchema.virtual("currentPrice").get(function () {
   const now = new Date();
@@ -447,7 +515,7 @@ carSchema.virtual("currentPrice").get(function () {
 
 // Pre-save middleware
 carSchema.pre("save", function (next) {
-  // Generate slug if not exists or if title/brand/model changed
+  // Generate unique slug if not exists or if title/brand/model changed
   if (
     this.isModified("title") ||
     this.isModified("brand") ||
@@ -455,15 +523,48 @@ carSchema.pre("save", function (next) {
     !this.slug
   ) {
     const slugBase = this.title || `${this.brand}-${this.model}-${this.year}`;
-    this.slug = slugBase
+    let baseSlug = slugBase
       .toLowerCase()
       .replace(/[^a-z0-9]/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
+
+    // Make slug unique by adding timestamp or random suffix
+    const timestamp = Date.now().toString(36);
+    this.slug = `${baseSlug}-${timestamp}`;
   }
 
   // Update timestamp
   this.updatedAt = Date.now();
+
+  // Validate and auto-correct inventory
+  if (this.isModified("inventory") || this.isNew) {
+    const inv = this.inventory;
+
+    // Auto-calculate availableUnits if not set
+    if (inv.availableUnits === undefined || inv.availableUnits === null) {
+      inv.availableUnits =
+        inv.totalUnits -
+        (inv.rentedUnits + inv.maintenanceUnits + inv.outOfServiceUnits);
+    }
+
+    // Validate total units equation
+    const totalUsed =
+      inv.rentedUnits +
+      inv.maintenanceUnits +
+      inv.outOfServiceUnits +
+      inv.availableUnits;
+    if (totalUsed !== inv.totalUnits) {
+      // Auto-adjust availableUnits to match
+      inv.availableUnits =
+        inv.totalUnits -
+        (inv.rentedUnits + inv.maintenanceUnits + inv.outOfServiceUnits);
+
+      if (inv.availableUnits < 0) {
+        return next(new Error("Inventory units cannot exceed total units"));
+      }
+    }
+  }
 
   // Calculate weekly/monthly prices if not set
   if (this.pricing.daily && !this.pricing.weekly) {

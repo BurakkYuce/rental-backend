@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const Admin = require("../models/Admin");
 const { uploadImage, deleteImage } = require("../utils/cloudinary");
+const { validationResult } = require("express-validator");
 
 // Generate JWT Token
 const generateToken = (id) => {
@@ -611,6 +612,268 @@ exports.verifyToken = async (req, res) => {
     res.status(401).json({
       success: false,
       error: "Invalid token",
+    });
+  }
+};
+
+// ===== ADDITIONAL ADMIN AUTH FUNCTIONS FROM ALLAPIS =====
+
+/**
+ * @swagger
+ * /api/admin/login:
+ *   post:
+ *     summary: Admin login to get JWT token
+ *     tags: [Admin Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - password
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 example: admin
+ *               password:
+ *                 type: string
+ *                 example: admin123
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 token:
+ *                   type: string
+ *                   example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *                 data:
+ *                   $ref: '#/components/schemas/Admin'
+ *       400:
+ *         description: Invalid credentials
+ */
+// @desc    Admin login (alternative implementation)
+// @route   POST /api/admin/login
+// @access  Public
+exports.adminLogin = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Username and password are required",
+      });
+    }
+
+    // Find admin by username or email
+    const admin = await Admin.findByLogin(username);
+    if (!admin) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid credentials",
+      });
+    }
+
+    // Check password
+    const isValidPassword = await admin.comparePassword(password);
+    if (!isValidPassword) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid credentials",
+      });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: admin._id },
+      process.env.JWT_SECRET || "your_jwt_secret_key_here",
+      { expiresIn: "7d" }
+    );
+
+    // Update login info
+    await admin.handleSuccessfulLogin(req.ip, req.get("User-Agent"));
+
+    res.status(200).json({
+      success: true,
+      token,
+      data: {
+        id: admin._id,
+        username: admin.username,
+        email: admin.email,
+        firstName: admin.firstName,
+        lastName: admin.lastName,
+        role: admin.role,
+        fullName: admin.fullName,
+      },
+    });
+  } catch (error) {
+    console.error("Error in adminLogin:", error);
+    res.status(500).json({
+      success: false,
+      error: "Login failed",
+      message:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Something went wrong",
+    });
+  }
+};
+
+/**
+ * @swagger
+ * /api/admin/register:
+ *   post:
+ *     summary: Create new admin account
+ *     tags: [Admin Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - username
+ *               - email
+ *               - password
+ *               - firstName
+ *               - lastName
+ *             properties:
+ *               username:
+ *                 type: string
+ *                 example: newadmin
+ *               email:
+ *                 type: string
+ *                 example: newadmin@mitcarrental.com
+ *               password:
+ *                 type: string
+ *                 example: admin123
+ *               firstName:
+ *                 type: string
+ *                 example: John
+ *               lastName:
+ *                 type: string
+ *                 example: Doe
+ *               role:
+ *                 type: string
+ *                 enum: [super_admin, admin, manager, editor]
+ *                 example: admin
+ *     responses:
+ *       201:
+ *         description: Admin created successfully
+ *       400:
+ *         description: Validation error or admin already exists
+ */
+// @desc    Create new admin account
+// @route   POST /api/admin/register
+// @access  Public
+exports.createAdmin = async (req, res) => {
+  try {
+    // Check for validation errors first
+    const errors = validationResult(req);
+
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: "Validation failed",
+        details: errors.array(),
+      });
+    }
+
+    const { username, email, password, firstName, lastName, role } = req.body;
+
+    // Validate required fields
+    if (!username || !email || !password || !firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        error:
+          "Username, email, password, firstName, and lastName are required",
+      });
+    }
+
+    // Check if admin already exists
+    const existingAdmin = await Admin.findOne({
+      $or: [
+        { username: username.toLowerCase() },
+        { email: email.toLowerCase() },
+      ],
+    });
+
+    if (existingAdmin) {
+      return res.status(400).json({
+        success: false,
+        error: "Admin with this username or email already exists",
+      });
+    }
+
+    // Create new admin
+    const newAdmin = new Admin({
+      username: username.toLowerCase(),
+      email: email.toLowerCase(),
+      password,
+      firstName,
+      lastName,
+      role: role || "admin",
+      isActive: true,
+      isEmailVerified: true,
+      permissions: [
+        {
+          module: "cars",
+          actions: ["create", "read", "update", "delete"],
+        },
+        {
+          module: "bookings",
+          actions: ["create", "read", "update", "delete"],
+        },
+        {
+          module: "content",
+          actions: ["create", "read", "update", "delete"],
+        },
+      ],
+    });
+
+    await newAdmin.save();
+
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { id: newAdmin._id },
+      process.env.JWT_SECRET || 'your_jwt_secret_key_here',
+      { expiresIn: '7d' }
+    );
+
+    // Log the registration activity
+    await newAdmin.handleSuccessfulLogin(req.ip, req.get('User-Agent'));
+
+    res.status(201).json({
+      success: true,
+      message: "Admin created successfully",
+      token,
+      data: {
+        id: newAdmin._id,
+        username: newAdmin.username,
+        email: newAdmin.email,
+        firstName: newAdmin.firstName,
+        lastName: newAdmin.lastName,
+        role: newAdmin.role,
+        fullName: newAdmin.fullName,
+      },
+    });
+  } catch (error) {
+    console.error("Error in createAdmin:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to create admin",
+      message:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Something went wrong",
     });
   }
 };
