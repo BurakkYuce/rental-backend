@@ -1436,7 +1436,7 @@ const getAdminCarDetails = async (req, res) => {
       },
       status: car.status !== undefined ? car.status : true,
       featured: car.featured || false,
-      features: car.features || [],
+      features: car.features ? car.features.map(f => f.name || f) : [],
       description: car.description || "",
       seats: car.seats?.toString() || "",
       doors: car.doors?.toString() || "",
@@ -1485,7 +1485,8 @@ const createAdminCar = async (req, res) => {
       seats,
       doors,
       engineCapacity,
-      bodyType
+      bodyType,
+      seasonalPricing
     } = req.body;
 
     // Validate required fields
@@ -1549,8 +1550,12 @@ const createAdminCar = async (req, res) => {
         gallery: images?.gallery || [],
       },
 
-      // Features - simplified to array of strings
-      features: features || [],
+      // Features - transform array of strings to array of objects
+      features: features ? features.map(feature => ({
+        name: feature,
+        icon: "",
+        category: "comfort"
+      })) : [],
 
       // Status and featured
       status: status !== undefined ? status : true,
@@ -1558,6 +1563,16 @@ const createAdminCar = async (req, res) => {
 
       // SEO
       slug: slug,
+
+      // Seasonal pricing
+      seasonalPricing: seasonalPricing ? seasonalPricing.map(sp => ({
+        startDate: new Date(sp.startDate),
+        endDate: new Date(sp.endDate),
+        daily: parseFloat(sp.daily) || 0,
+        weekly: parseFloat(sp.weekly) || 0,
+        monthly: parseFloat(sp.monthly) || 0,
+        name: sp.name || ""
+      })) : [],
 
       // Metadata
       createdAt: new Date(),
@@ -1614,7 +1629,8 @@ const updateAdminCar = async (req, res) => {
       seats,
       doors,
       engineCapacity,
-      bodyType
+      bodyType,
+      seasonalPricing
     } = req.body;
 
     // Find existing car
@@ -1691,9 +1707,25 @@ const updateAdminCar = async (req, res) => {
       };
     }
 
-    // Update features as simple array of strings
+    // Update features - transform array of strings to array of objects
     if (features !== undefined) {
-      updateData.features = features || [];
+      updateData.features = features ? features.map(feature => ({
+        name: feature,
+        icon: "",
+        category: "comfort"
+      })) : [];
+    }
+
+    // Update seasonal pricing
+    if (seasonalPricing !== undefined) {
+      updateData.seasonalPricing = seasonalPricing ? seasonalPricing.map(sp => ({
+        startDate: new Date(sp.startDate),
+        endDate: new Date(sp.endDate),
+        daily: parseFloat(sp.daily) || 0,
+        weekly: parseFloat(sp.weekly) || 0,
+        monthly: parseFloat(sp.monthly) || 0,
+        name: sp.name || ""
+      })) : [];
     }
 
     updateData.updatedAt = new Date();
