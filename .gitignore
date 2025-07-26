@@ -54,3 +54,7 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Claude Code files
+.claude/
+.claude*
