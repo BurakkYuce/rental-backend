@@ -13,11 +13,11 @@ const connectDB = require("./src/utils/database");
 const authRoutes = require("./src/routes/auth");
 const carRoutes = require("./src/routes/cars");
 const bookingRoutes = require("./src/routes/bookings");
-const userRoutes = require("./src/routes/users");
 const contentRoutes = require("./src/routes/content");
 const uploadRoutes = require("./src/routes/upload");
 const adminRoutes = require("./src/routes/admin");
 const blogRoutes = require("./src/routes/blog");
+const exchangeRateRoutes = require("./src/routes/exchangeRates");
 
 // Express app oluştur
 const app = express();
@@ -80,11 +80,11 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/cars", carRoutes);
 app.use("/api/bookings", bookingRoutes);
-app.use("/api/users", userRoutes);
 app.use("/api", contentRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/blogs", blogRoutes);
+app.use("/api/exchange-rates", exchangeRateRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {

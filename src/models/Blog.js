@@ -160,6 +160,13 @@ blogSchema.index({ featured: 1, status: 1, publishedAt: -1 });
 // Virtual for formatted date
 blogSchema.virtual("formattedDate").get(function () {
   const date = this.publishedAt || this.createdAt;
+  if (!date) {
+    return new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",

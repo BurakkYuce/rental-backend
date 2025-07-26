@@ -25,7 +25,14 @@
       "Bash(git commit:*)",
       "Bash(mkdir:*)",
       "Bash(copy:*)",
-      "Bash(cp:*)"
+      "Bash(cp:*)",
+      "Bash(find:*)",
+      "Bash(del sample-car.js sample-blog.js)",
+      "Bash(touch:*)",
+      "Bash(pkill:*)",
+      "Bash(git push:*)",
+      "Bash(git init:*)",
+      "Bash(git rebase:*)"
     ],
     "deny": []
   }

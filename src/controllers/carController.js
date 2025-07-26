@@ -1107,7 +1107,7 @@ const getFilterOptions = async (req, res) => {
 const toggleCarLike = async (req, res) => {
   try {
     const { carId } = req.params;
-    const userId = req.user?.id; // Assuming auth middleware sets req.user
+    const userId = req.admin?.id || req.admin?._id; // Auth middleware sets req.admin
 
     if (!userId) {
       return res.status(401).json({

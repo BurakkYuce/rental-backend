@@ -8,12 +8,14 @@ const { protect } = require("../middleware/auth");
 const {
   getAdminRecentBookings,
   getAdminBookings,
+  getBookingById,
+  createBooking,
+  updateBooking,
   updateBookingStatus,
+  deleteBooking,
+  getBookingStatistics,
 } = require("../controllers/bookingController");
 
-const {
-  getAdminUsers,
-} = require("../controllers/userController");
 
 const {
   getAdminDashboardStats,
@@ -55,6 +57,13 @@ const {
   toggleFeatured,
   updateBlogStatus,
 } = require("../controllers/blogController");
+
+const {
+  getCurrentRates,
+  getRateHistory,
+  updateExchangeRates,
+  initializeDefaultRates,
+} = require("../controllers/exchangeRateController");
 
 /**
  * @swagger
@@ -109,6 +118,92 @@ router.get(
   getAdminBookings
 );
 
+// Get single booking by ID
+router.get("/bookings/:id", getBookingById);
+
+// Create new booking (admin only)
+router.post(
+  "/bookings",
+  [
+    body("carId")
+      .notEmpty()
+      .isMongoId()
+      .withMessage("Valid car ID is required"),
+    body("drivers")
+      .isArray({ min: 1 })
+      .withMessage("At least one driver is required"),
+    body("drivers.*.name")
+      .notEmpty()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Driver name must be between 2 and 100 characters"),
+    body("drivers.*.surname")
+      .notEmpty()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Driver surname must be between 2 and 100 characters"),
+    body("drivers.*.phoneNumber")
+      .notEmpty()
+      .isMobilePhone()
+      .withMessage("Valid phone number is required"),
+    body("pickupLocation")
+      .notEmpty()
+      .isLength({ min: 5, max: 200 })
+      .withMessage("Pickup location must be between 5 and 200 characters"),
+    body("dropoffLocation")
+      .notEmpty()
+      .isLength({ min: 5, max: 200 })
+      .withMessage("Dropoff location must be between 5 and 200 characters"),
+    body("pickupTime")
+      .notEmpty()
+      .isISO8601()
+      .withMessage("Valid pickup time is required"),
+    body("dropoffTime")
+      .notEmpty()
+      .isISO8601()
+      .withMessage("Valid dropoff time is required"),
+  ],
+  createBooking
+);
+
+// Update existing booking
+router.put(
+  "/bookings/:id",
+  [
+    body("drivers")
+      .optional()
+      .isArray({ min: 1 })
+      .withMessage("At least one driver is required"),
+    body("drivers.*.name")
+      .optional()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Driver name must be between 2 and 100 characters"),
+    body("drivers.*.surname")
+      .optional()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Driver surname must be between 2 and 100 characters"),
+    body("drivers.*.phoneNumber")
+      .optional()
+      .isMobilePhone()
+      .withMessage("Valid phone number is required"),
+    body("pickupLocation")
+      .optional()
+      .isLength({ min: 5, max: 200 })
+      .withMessage("Pickup location must be between 5 and 200 characters"),
+    body("dropoffLocation")
+      .optional()
+      .isLength({ min: 5, max: 200 })
+      .withMessage("Dropoff location must be between 5 and 200 characters"),
+    body("pickupTime")
+      .optional()
+      .isISO8601()
+      .withMessage("Valid pickup time is required"),
+    body("dropoffTime")
+      .optional()
+      .isISO8601()
+      .withMessage("Valid dropoff time is required"),
+  ],
+  updateBooking
+);
+
 // Update booking status
 router.put(
   "/bookings/:id/status",
@@ -120,6 +215,12 @@ router.put(
   ],
   updateBookingStatus
 );
+
+// Delete booking
+router.delete("/bookings/:id", deleteBooking);
+
+// Get booking statistics
+router.get("/bookings/statistics", getBookingStatistics);
 
 // ===== CAR MANAGEMENT ROUTES =====
 
@@ -325,31 +426,6 @@ router.put(
   updateCarInventory
 );
 
-// ===== USER MANAGEMENT ROUTES =====
-
-// Get all users for admin management
-router.get(
-  "/users",
-  [
-    query("page")
-      .optional()
-      .isInt({ min: 1 })
-      .withMessage("Page must be a positive integer"),
-    query("limit")
-      .optional()
-      .isInt({ min: 1, max: 100 })
-      .withMessage("Limit must be between 1 and 100"),
-    query("status")
-      .optional()
-      .isIn(["Active", "Inactive"])
-      .withMessage("Invalid user status"),
-    query("search")
-      .optional()
-      .isLength({ min: 1 })
-      .withMessage("Search query cannot be empty"),
-  ],
-  getAdminUsers
-);
 
 // ===== NEWS MANAGEMENT ROUTES =====
 
@@ -618,6 +694,58 @@ router.patch(
   ],
   updateBlogStatus
 );
+
+// ===== EXCHANGE RATES MANAGEMENT ROUTES =====
+
+// Get current exchange rates
+router.get("/exchange-rates", getCurrentRates);
+
+// Get exchange rate history
+router.get(
+  "/exchange-rates/history",
+  [
+    query("page")
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage("Page must be a positive integer"),
+    query("limit")
+      .optional()
+      .isInt({ min: 1, max: 100 })
+      .withMessage("Limit must be between 1 and 100"),
+  ],
+  getRateHistory
+);
+
+// Update exchange rates manually
+router.put(
+  "/exchange-rates",
+  [
+    body("rates")
+      .notEmpty()
+      .isObject()
+      .withMessage("Exchange rates object is required"),
+    body("rates.EUR")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("EUR rate must be a positive number"),
+    body("rates.USD")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("USD rate must be a positive number"),
+    body("rates.TRY")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("TRY rate must be a positive number"),
+    body("updateNotes")
+      .optional()
+      .isLength({ max: 500 })
+      .withMessage("Update notes must be less than 500 characters"),
+  ],
+  updateExchangeRates
+);
+
+// Initialize exchange rates (if needed)
+router.post("/exchange-rates/initialize", initializeDefaultRates);
 
 // ===== LOCATION ROUTES =====
 

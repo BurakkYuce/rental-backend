@@ -687,7 +687,7 @@ exports.adminLogin = async (req, res) => {
     if (!isValidPassword) {
       return res.status(400).json({
         success: false,
-        error: "Invalid credentials",
+        error: "Invalid credentials",   
       });
     }
 
