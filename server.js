@@ -130,11 +130,12 @@ app.use((error, req, res, next) => {
 });
 
 // Database connection ve server start
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 const startServer = async () => {
   try {
     // Database'e bağlan
+
     await connectDB();
     console.log("✅ MongoDB connected");
 
