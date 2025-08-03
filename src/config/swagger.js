@@ -38,13 +38,15 @@ const options = {
         },
       },
       schemas: {
-        Car: {
+        Listing: {
           type: "object",
-          required: ["title", "brand", "model", "year", "category", "pricing"],
+          required: ["title", "brand", "model", "year", "pricing"],
           properties: {
-            _id: {
+            id: {
               type: "string",
-              description: "Car ID",
+              format: "uuid",
+              description: "Listing UUID",
+              example: "a47ac10b-58cc-4372-a567-0e02b2c3d470"
             },
             title: {
               type: "string",
@@ -139,10 +141,85 @@ const options = {
                 },
               },
             },
+            slug: {
+              type: "string",
+              description: "Car URL slug",
+              example: "bmw-3-series-1753786622021",
+            },
+            description: {
+              type: "string",
+              description: "Car description",
+              example: "Luxurious BMW 3 Series with premium features",
+            },
+            bodyType: {
+              type: "string",
+              description: "Car body type",
+              example: "Sedan",
+            },
+            seats: {
+              type: "integer",
+              description: "Number of seats",
+              example: 5,
+            },
+            doors: {
+              type: "integer", 
+              description: "Number of doors",
+              example: 4,
+            },
             status: {
-              type: "boolean",
-              description: "Car availability status",
-              example: true,
+              type: "string",
+              enum: ["active", "inactive", "maintenance"],
+              description: "Listing status",
+              example: "active",
+            },
+            totalUnits: {
+              type: "integer",
+              description: "Total available units",
+              example: 1,
+            },
+            availableUnits: {
+              type: "integer",
+              description: "Currently available units", 
+              example: 1,
+            },
+            minDriverAge: {
+              type: "integer",
+              description: "Minimum driver age",
+              example: 21,
+            },
+            minLicenseYear: {
+              type: "integer",
+              description: "Minimum license years",
+              example: 1,
+            },
+            stats: {
+              type: "object",
+              properties: {
+                viewCount: { type: "integer", example: 0 },
+                reservationCount: { type: "integer", example: 0 },
+                rating: {
+                  type: "object",
+                  properties: {
+                    average: { type: "number", example: 0 },
+                    count: { type: "integer", example: 0 }
+                  }
+                }
+              }
+            },
+            userId: {
+              type: "string",
+              format: "uuid",
+              description: "Owner user ID"
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              description: "Creation timestamp"
+            },
+            updatedAt: {
+              type: "string", 
+              format: "date-time",
+              description: "Last update timestamp"
             },
             featured: {
               type: "boolean",
@@ -161,44 +238,71 @@ const options = {
             },
           },
         },
-        Admin: {
+        User: {
           type: "object",
-          required: ["username", "email", "password", "firstName", "lastName"],
+          required: ["email", "password", "firstName", "lastName"],
           properties: {
-            _id: {
+            id: {
               type: "string",
-              description: "Admin ID",
-            },
-            username: {
-              type: "string",
-              description: "Admin username",
-              example: "admin",
-            },
-            email: {
-              type: "string",
-              format: "email",
-              description: "Admin email",
-              example: "admin@mitcarrental.com",
+              format: "uuid",
+              description: "User UUID",
+              example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
             },
             firstName: {
               type: "string",
-              description: "Admin first name",
+              description: "User first name",
               example: "John",
             },
             lastName: {
               type: "string",
-              description: "Admin last name",
+              description: "User last name", 
               example: "Doe",
+            },
+            email: {
+              type: "string",
+              format: "email",
+              description: "User email",
+              example: "user@mitcarrental.com",
+            },
+            phone: {
+              type: "string",
+              description: "User phone number",
+              example: "+905551234567",
+            },
+            avatar: {
+              type: "string",
+              description: "User avatar URL",
+              example: "https://cloudinary.com/avatar.jpg",
             },
             role: {
               type: "string",
-              enum: ["super_admin", "admin", "manager", "editor"],
-              example: "admin",
+              enum: ["user", "admin"],
+              example: "user",
             },
             isActive: {
               type: "boolean",
-              description: "Admin account status",
+              description: "User account status",
               example: true,
+            },
+            emailVerified: {
+              type: "boolean",
+              description: "Email verification status",
+              example: false,
+            },
+            lastLogin: {
+              type: "string",
+              format: "date-time",
+              description: "Last login timestamp",
+            },
+            createdAt: {
+              type: "string",
+              format: "date-time",
+              description: "Account creation timestamp",
+            },
+            updatedAt: {
+              type: "string",
+              format: "date-time", 
+              description: "Last update timestamp",
             },
           },
         },

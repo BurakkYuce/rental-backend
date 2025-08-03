@@ -23,7 +23,7 @@ const {
 } = require("../controllers/authController");
 
 const { upload } = require("../utils/cloudinary");
-const { protect } = require("../middleware/auth");
+const auth = require("../middleware/auth");
 const { body } = require("express-validator");
 const {
   validateLogin,
@@ -42,23 +42,23 @@ router.put("/reset-password/:resettoken", resetPassword);
 router.get("/verify", verifyToken);
 
 // Protected routes
-router.get("/me", protect, getMe);
-router.put("/profile", protect, updateProfile);
-router.put("/password", protect, changePassword);
-router.post("/logout", protect, logout);
+router.get("/me", auth, getMe);
+router.put("/profile", auth, updateProfile);
+router.put("/password", auth, changePassword);
+router.post("/logout", auth, logout);
 
 // Avatar management
 router.post(
   "/avatar",
-  protect,
+  auth,
   upload.single("avatar"),
   validateFileUpload(["image/jpeg", "image/jpg", "image/png"], 2 * 1024 * 1024), // 2MB limit
   uploadAvatar
 );
-router.delete("/avatar", protect, deleteAvatar);
+router.delete("/avatar", auth, deleteAvatar);
 
 // Activity log
-router.get("/activity", protect, getActivity);
+router.get("/activity", auth, getActivity);
 
 // ===== ADMIN AUTHENTICATION ROUTES =====
 

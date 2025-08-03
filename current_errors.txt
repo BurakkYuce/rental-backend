@@ -1,0 +1,185 @@
+
+🔵 GET /api/listings/a47ac10b-58cc-4372-a567-0e02b2c3d470
+📤 Headers: {
+  "host": "localhost:4000",
+  "connection": "keep-alive",
+  "sec-ch-ua-platform": "\"Windows\"",
+  "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjlhMjcxOTJjLTViNGMtNDMzNC04ZWQ5LTJhOWY2NzlhYTE2NCIsImlhdCI6MTc1Mzc4OTQ0NiwiZXhwIjoxNzU0Mzk0MjQ2fQ.uLtMHpklPCR5VHL07lsXAVXQc7VQlfjTXAiNYaEvYaY",
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+  "accept": "application/json, text/plain, */*",
+  "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+  "dnt": "1",
+  "sec-ch-ua-mobile": "?0",
+  "origin": "http://localhost:5173",
+  "sec-fetch-site": "same-site",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-dest": "empty",
+  "referer": "http://localhost:5173/",
+  "accept-encoding": "gzip, deflate, br, zstd",
+  "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+}
+❌ Get listing error: Error
+    at Query.run (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\sequelize\lib\dialects\postgres\query.js:50:25)
+    at C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\sequelize\lib\sequelize.js:315:28
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async PostgresQueryInterface.increment (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\sequelize\lib\dialects\abstract\query-interface.js:414:12)
+    at async Listing.increment (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\sequelize\lib\model.js:2115:22)
+    at async model.increment (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\sequelize\lib\model.js:2676:5)
+    at async getListing (C:\Users\burak\Desktop\mitcar-front\Backend\src\controllers\listingController.js:286:5) {
+  name: 'SequelizeDatabaseError',
+  parent: error: column "stats.viewCount" does not exist
+      at Parser.parseErrorMessage (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:285:98)
+      at Parser.handlePacket (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:122:29)
+      at Parser.parse (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:35:38)
+      at Socket.<anonymous> (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\index.js:11:42)
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+      at Readable.push (node:internal/streams/readable:392:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) { 
+    length: 115,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '41',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3721',
+    routine: 'errorMissingColumn',
+    sql: `UPDATE "listings" SET "stats.viewCount"="stats.viewCount"+ 1,"updated_at"='2025-07-29 11:48:54.500 +00:00' WHERE "id" = 'a47ac10b-58cc-4372-a567-0e02b2c3d470' RETURNING *`,
+    parameters: undefined
+  },
+  original: error: column "stats.viewCount" does not exist
+      at Parser.parseErrorMessage (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:285:98)
+      at Parser.handlePacket (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:122:29)
+      at Parser.parse (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\parser.js:35:38)
+      at Socket.<anonymous> (C:\Users\burak\Desktop\mitcar-front\Backend\node_modules\pg-protocol\dist\index.js:11:42)
+      at Socket.emit (node:events:518:28)
+      at addChunk (node:internal/streams/readable:561:12)
+      at readableAddChunkPushByteMode (node:internal/streams/readable:512:3)
+      at Readable.push (node:internal/streams/readable:392:5)
+      at TCP.onStreamRead (node:internal/stream_base_commons:189:23) { 
+    length: 115,
+    severity: 'ERROR',
+    code: '42703',
+    detail: undefined,
+    hint: undefined,
+    position: '41',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_relation.c',
+    line: '3721',
+    routine: 'errorMissingColumn',
+    sql: `UPDATE "listings" SET "stats.viewCount"="stats.viewCount"+ 1,"updated_at"='2025-07-29 11:48:54.500 +00:00' WHERE "id" = 'a47ac10b-58cc-4372-a567-0e02b2c3d470' RETURNING *`,
+    parameters: undefined
+  },
+  sql: `UPDATE "listings" SET "stats.viewCount"="stats.viewCount"+ 1,"updated_at"='2025-07-29 11:48:54.500 +00:00' WHERE "id" = 'a47ac10b-58cc-4372-a567-0e02b2c3d470' RETURNING *`,
+  parameters: {}
+}
+📥 Response [500] (5ms): {
+  "error": "Failed to fetch listing",
+  "message": "column \"stats.viewCount\" does not exist"
+}
+================================================================================ 
+
+
+
+🔵 POST /api/blogs/admin
+📤 Headers: {
+  "host": "localhost:4000",
+  "connection": "keep-alive",
+  "content-length": "234",
+  "sec-ch-ua-platform": "\"Windows\"",
+  "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjlhMjcxOTJjLTViNGMtNDMzNC04ZWQ5LTJhOWY2NzlhYTE2NCIsImlhdCI6MTc1Mzc4OTQ0NiwiZXhwIjoxNzU0Mzk0MjQ2fQ.uLtMHpklPCR5VHL07lsXAVXQc7VQlfjTXAiNYaEvYaY",
+  "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+  "sec-ch-ua-mobile": "?0",
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+  "accept": "application/json, text/plain, */*",
+  "dnt": "1",
+  "content-type": "application/json",
+  "origin": "http://localhost:5173",
+  "sec-fetch-site": "same-site",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-dest": "empty",
+  "referer": "http://localhost:5173/",
+  "accept-encoding": "gzip, deflate, br, zstd",
+  "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+}
+📤 Body: {
+  "title": "asd",
+  "slug": "asd",
+  "excerpt": "sda",
+  "content": "sadasad",
+  "featuredImage": {
+    "url": "",
+    "alt": "sad",
+    "publicId": ""
+  },
+  "author": {
+    "name": "Admin",
+    "avatar": ""
+  },
+  "category": "Company News",
+  "tags": [
+    "asd"
+  ],
+  "status": "published",
+  "featured": false
+}
+📥 Response [404] (1ms): {
+  "error": "Route not found",
+  "path": "/api/blogs/admin"
+}
+================================================================================
+
+=========
+
+🔵 PUT /api/admin/exchange-rates
+📤 Headers: {
+  "host": "localhost:4000",
+  "connection": "keep-alive",
+  "content-length": "44",
+  "sec-ch-ua-platform": "\"Windows\"",
+  "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjlhMjcxOTJjLTViNGMtNDMzNC04ZWQ5LTJhOWY2NzlhYTE2NCIsImlhdCI6MTc1Mzc4OTQ0NiwiZXhwIjoxNzU0Mzk0MjQ2fQ.uLtMHpklPCR5VHL07lsXAVXQc7VQlfjTXAiNYaEvYaY",
+  "sec-ch-ua": "\"Not)A;Brand\";v=\"8\", \"Chromium\";v=\"138\", \"Google Chrome\";v=\"138\"",
+  "sec-ch-ua-mobile": "?0",
+  "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+  "accept": "application/json, text/plain, */*",
+  "dnt": "1",
+  "content-type": "application/json",
+  "origin": "http://localhost:5173",
+  "sec-fetch-site": "same-site",
+  "sec-fetch-mode": "cors",
+  "sec-fetch-dest": "empty",
+  "referer": "http://localhost:5173/",
+  "accept-encoding": "gzip, deflate, br, zstd",
+  "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+}
+📤 Body: {
+  "rates": {
+    "TRY": 2,
+    "USD": 2
+  },
+  "updateNotes": ""
+}
+📥 Response [404] (1ms): {
+  "error": "Route not found",
+  "path": "/api/admin/exchange-rates"
+}
+================================================================================
+ 
+

@@ -4,20 +4,20 @@ const cors = require("cors");
 const path = require("path");
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpecs = require("./src/config/swagger");
+const { logger, logAPI, logError, logInfo } = require("./src/config/logger");
 require("dotenv").config();
 
-// Database connection
-const connectDB = require("./src/utils/database");
+// Database connections
+const { connectDB: connectPostgreSQL } = require("./src/config/database");
 
-// Route imports
-const authRoutes = require("./src/routes/auth");
-const carRoutes = require("./src/routes/cars");
-const bookingRoutes = require("./src/routes/bookings");
-const contentRoutes = require("./src/routes/content");
-const uploadRoutes = require("./src/routes/upload");
-const adminRoutes = require("./src/routes/admin");
+// Route imports - PostgreSQL routes
+const listingRoutes = require("./src/routes/listings");
+const imageUploadRoutes = require("./src/routes/imageUpload");
+const adminAuthRoutes = require("./src/routes/adminAuth");
 const blogRoutes = require("./src/routes/blog");
-const exchangeRateRoutes = require("./src/routes/exchangeRates");
+
+// Minimal compatibility routes for frontend
+const minimalCompatRoutes = require("./src/routes/minimal-compat");
 
 // Express app oluştur
 const app = express();
@@ -40,22 +40,34 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use((req, res, next) => {
   const start = Date.now();
 
-  // Log request
-  console.log(`\n🔵 ${req.method} ${req.url}`);
-  console.log(`📤 Headers:`, JSON.stringify(req.headers, null, 2));
-  if (req.body && Object.keys(req.body).length > 0) {
-    console.log(`📤 Body:`, JSON.stringify(req.body, null, 2));
-  }
-
   // Store original res.json to intercept response
   const originalJson = res.json;
   res.json = function (body) {
     const duration = Date.now() - start;
-    console.log(
-      `📥 Response [${res.statusCode}] (${duration}ms):`,
-      JSON.stringify(body, null, 2)
-    );
-    console.log(`${"=".repeat(80)}`);
+
+    // Log to Winston
+    logAPI(req.method, req.url, res.statusCode, duration, null, {
+      userAgent: req.get("User-Agent"),
+      ip: req.ip || req.connection?.remoteAddress,
+      headers: req.headers,
+      body: req.body,
+      response: body,
+    });
+
+    // Console log for development
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`\n🔵 ${req.method} ${req.url}`);
+      console.log(`📤 Headers:`, JSON.stringify(req.headers, null, 2));
+      if (req.body && Object.keys(req.body).length > 0) {
+        console.log(`📤 Body:`, JSON.stringify(req.body, null, 2));
+      }
+      console.log(
+        `📥 Response [${res.statusCode}] (${duration}ms):`,
+        JSON.stringify(body, null, 2)
+      );
+      console.log(`${"=".repeat(80)}`);
+    }
+
     return originalJson.call(this, body);
   };
 
@@ -76,15 +88,15 @@ app.use(
   })
 );
 
-// API Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/cars", carRoutes);
-app.use("/api/bookings", bookingRoutes);
-app.use("/api", contentRoutes);
-app.use("/api/upload", uploadRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/blogs", blogRoutes);
-app.use("/api/exchange-rates", exchangeRateRoutes);
+// API Routes - PostgreSQL routes
+app.use("/api/listings", listingRoutes);
+app.use("/api/images", imageUploadRoutes);
+app.use("/api/auth", adminAuthRoutes);
+app.use("/api/admin", adminAuthRoutes);
+app.use("/api", blogRoutes);
+
+// Use minimal compatibility routes for missing endpoints
+app.use("/api", minimalCompatRoutes);
 
 // Health check endpoint
 app.get("/api/health", (req, res) => {
@@ -105,7 +117,19 @@ app.use("*", (req, res) => {
 
 // Error handler
 app.use((error, req, res, next) => {
-  console.error("Error:", error);
+  // Log error to Winston
+  logError(error, {
+    url: req.url,
+    method: req.method,
+    ip: req.ip || req.connection?.remoteAddress,
+    userAgent: req.get("User-Agent"),
+    body: req.body,
+  });
+
+  // Console log for development
+  if (process.env.NODE_ENV !== "production") {
+    console.error("Error:", error);
+  }
 
   if (error.name === "ValidationError") {
     return res.status(400).json({
@@ -130,21 +154,32 @@ app.use((error, req, res, next) => {
 });
 
 // Database connection ve server start
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 4000;
 
 const startServer = async () => {
   try {
-    // Database'e bağlan
-    await connectDB();
-    console.log("✅ MongoDB connected");
+    // Connect to PostgreSQL database
+    await connectPostgreSQL();
+    logInfo("PostgreSQL connected successfully");
 
     // Server'ı başlat
     app.listen(PORT, () => {
-      console.log(`🚀 Rentaly API running on port ${PORT}`);
-      console.log(`📖 Health check: http://localhost:${PORT}/api/health`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+      logInfo(`Rentaly API started on port ${PORT}`, {
+        port: PORT,
+        environment: process.env.NODE_ENV || "development",
+        healthCheck: `http://localhost:${PORT}/api/health`,
+      });
+
+      // Console log for development
+      if (process.env.NODE_ENV !== "production") {
+        console.log(`🚀 Rentaly API running on port ${PORT}`);
+        console.log(`📖 Health check: http://localhost:${PORT}/api/health`);
+        console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+        console.log(`📁 Logs directory: ${path.join(__dirname, "logs")}`);
+      }
     });
   } catch (error) {
+    logError(error, { context: "Server startup" });
     console.error("❌ Server startup failed:", error);
     process.exit(1);
   }
