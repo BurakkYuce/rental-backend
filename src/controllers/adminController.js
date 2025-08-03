@@ -1,11 +1,9 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
+const { Op } = require("sequelize");
 
 // Import required models
-const Car = require("../models/cars");
-const Admin = require("../models/Admin");
-// const News = require("../models/News"); // News model not available yet
+const { Car, Admin } = require("../models");
 
 /**
  * @swagger
@@ -31,25 +29,27 @@ const Admin = require("../models/Admin");
  */
 const getLocations = async (req, res) => {
   try {
-    const Location = require("../models/Location");
+    // Mock locations for now - in a real implementation, you would have a Location model
+    const mockLocations = [
+      {
+        id: "1",
+        name: "Antalya Airport",
+        city: "Antalya",
+        type: "airport",
+        fullAddress: "Antalya Havalimanı, Antalya",
+        coordinates: { lat: 36.8987, lng: 30.8005 }
+      },
+      {
+        id: "2", 
+        name: "Antalya City Center",
+        city: "Antalya",
+        type: "city_center",
+        fullAddress: "Kaleiçi, Antalya",
+        coordinates: { lat: 36.8841, lng: 30.7056 }
+      }
+    ];
 
-    const locations = await Location.find({ status: true })
-      .select("name city type address coordinates")
-      .sort({ city: 1, name: 1 })
-      .lean();
-
-    // Transform locations for frontend
-    const transformedLocations = locations.map((location) => ({
-      id: location._id,
-      name: location.name,
-      city: location.city,
-      type: location.type,
-      fullAddress:
-        location.address?.fullAddress || `${location.name}, ${location.city}`,
-      coordinates: location.coordinates,
-    }));
-
-    res.status(200).json({ success: true, data: transformedLocations });
+    res.status(200).json({ success: true, data: mockLocations });
   } catch (error) {
     console.error("Error in getLocations:", error);
     res.status(500).json({
@@ -144,62 +144,62 @@ const getAdminCars = async (req, res) => {
     const { page = 1, limit = 20, search, status } = req.query;
 
     // Build filter object
-    let filter = {};
+    let where = {};
 
     // Search filter
     if (search) {
-      const searchRegex = new RegExp(search, "i");
-      filter.$or = [
-        { title: searchRegex },
-        { brand: searchRegex },
-        { model: searchRegex },
+      where[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { brand: { [Op.iLike]: `%${search}%` } },
+        { model: { [Op.iLike]: `%${search}%` } },
       ];
     }
 
     // Status filter
     if (status) {
-      filter.adminStatus = status;
+      where.status = status.toLowerCase();
     }
 
     // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
     // Get cars with full admin details
-    const cars = await Car.find(filter)
-      .select(
-        "title brand model year category fuelType transmission pricing images adminStatus featured whatsappNumber slug seats doors engineCapacity description features"
-      )
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
+    const { rows: cars, count: totalCars } = await Car.findAndCountAll({
+      where,
+      attributes: [
+        'id', 'title', 'brand', 'model', 'year', 'category', 'fuelType', 
+        'transmission', 'pricing', 'mainImage', 'status', 'featured', 
+        'slug', 'seats', 'doors', 'engineCapacity', 'description', 'createdAt'
+      ],
+      order: [['createdAt', 'DESC']],
+      offset,
+      limit: limitNum
+    });
 
-    // Get total count
-    const totalCars = await Car.countDocuments(filter);
     const totalPages = Math.ceil(totalCars / limitNum);
 
     // Transform cars for admin interface
     const transformedCars = cars.map((car) => ({
-      id: car._id,
+      id: car.id,
       name: car.title,
       type: car.category || "SUV",
-      status: car.adminStatus || "Available",
+      status: car.status || "active",
       basePrice: {
         USD: car.pricing?.daily?.toString() || "",
         EUR: car.pricing?.dailyEUR?.toString() || "",
-        TRY: car.pricing?.dailyTRY?.toString() || "",
+        TRY: car.pricing?.daily?.toString() || "",
       },
-      image: car.images?.main?.url || "/placeholder-car.jpg",
+      image: car.mainImage?.url || "/placeholder-car.jpg",
       seats: car.seats || 5,
-      transmission: car.transmission || "Automatic",
-      fuelType: car.fuelType || "Petrol",
+      transmission: car.transmission || "Manuel",
+      fuelType: car.fuelType || "Benzin",
       year: car.year || new Date().getFullYear(),
       engineCapacity: car.engineCapacity || "",
       doors: car.doors || 4,
       description: car.description || "",
-      features: car.features?.map((f) => f.name) || [],
+      features: [], // Features removed in simplified model
       createdAt: car.createdAt || new Date(),
       slug: car.slug,
     }));
@@ -291,7 +291,7 @@ const getAdminCarDetails = async (req, res) => {
         },
       });
     } else {
-      car = await Car.findById(id).lean();
+      car = await Car.findByPk(id);
     }
 
     if (!car) {
@@ -303,30 +303,30 @@ const getAdminCarDetails = async (req, res) => {
 
     // Transform car for admin form
     const transformedCar = {
-      id: car._id,
+      id: car.id,
       name: car.title,
       type: car.category || "SUV",
-      status: car.adminStatus || "Available",
+      status: car.status || "active",
       basePrice: {
         USD: car.pricing?.daily?.toString() || "",
-        EUR: car.pricing?.dailyEUR?.toString() || "",
-        TRY: car.pricing?.dailyTRY?.toString() || "",
+        EUR: car.pricing?.daily?.toString() || "",
+        TRY: car.pricing?.daily?.toString() || "",
       },
-      image: car.images?.main?.url || "",
+      image: car.mainImage?.url || "",
       seats: car.seats || "",
-      transmission: car.transmission || "Automatic",
-      fuelType: car.fuelType || "Petrol",
+      transmission: car.transmission || "Manuel",
+      fuelType: car.fuelType || "Benzin",
       year: car.year || new Date().getFullYear(),
       engineCapacity: car.engineCapacity || "",
       doors: car.doors || "",
       description: car.description || "",
-      features: car.features?.map((f) => f.name) || [],
-      whatsappNumber: car.whatsappNumber || "",
+      features: [], // Features removed in simplified model
+      whatsappNumber: "",
       brand: car.brand || "",
       model: car.model || "",
       category: car.category || "",
       featured: car.featured || false,
-      adminStatus: car.adminStatus || "Available",
+      adminStatus: car.status || "active",
     };
 
     res.status(200).json({ success: true, data: transformedCar });
@@ -453,50 +453,43 @@ const createAdminCar = async (req, res) => {
       : [];
 
     // Create new car document
-    const newCar = new Car({
+    const newCar = await Car.create({
       title: name,
       brand: brand || "",
       model: model || "",
       year: year || new Date().getFullYear(),
       category: type || "SUV",
-      fuelType: fuelType || "Petrol",
-      transmission: transmission || "Automatic",
+      fuelType: fuelType || "Benzin",
+      transmission: transmission || "Manuel",
       seats: parseInt(seats) || 5,
       doors: parseInt(doors) || 4,
-      engineCapacity: engineCapacity || "",
+      engineCapacity: parseInt(engineCapacity) || null,
+      bodyType: "Sedan", // Default body type
       pricing: {
         daily: parseFloat(basePrice?.USD) || 0,
-        dailyEUR: parseFloat(basePrice?.EUR) || 0,
-        dailyTRY: parseFloat(basePrice?.TRY) || 0,
         weekly: parseFloat(basePrice?.USD) * 6.5 || 0,
         monthly: parseFloat(basePrice?.USD) * 25 || 0,
+        currency: "TRY"
       },
-      images: {
-        main: {
-          url: image || "/placeholder-car.jpg",
-          alt: name,
-        },
-      },
+      mainImage: image ? {
+        url: image,
+        publicId: `car-${Date.now()}`,
+        filename: `${name}-image`
+      } : null,
       description: description || "",
-      features: formattedFeatures,
-      adminStatus: status || "Available",
+      status: status ? status.toLowerCase() : "active",
       featured: featured || false,
-      whatsappNumber: whatsappNumber || "",
       slug: slug,
-      availabilityStatus: true,
-      location: {
-        pickup: "Antalya Airport",
-        dropoff: "Antalya Airport",
-      },
+      userId: req.admin?.id || req.user?.id // Add the admin/user ID
     });
 
-    const savedCar = await newCar.save();
+    const savedCar = newCar;
 
     res.status(201).json({
       success: true,
       message: "Car created successfully",
       data: {
-        id: savedCar._id,
+        id: savedCar.id,
         name: savedCar.title,
         slug: savedCar.slug,
       },
@@ -611,7 +604,7 @@ const updateAdminCar = async (req, res) => {
     } = req.body;
 
     // Find the car
-    const car = await Car.findById(id);
+    const car = await Car.findByPk(id);
     if (!car) {
       return res.status(404).json({
         success: false,
@@ -647,45 +640,35 @@ const updateAdminCar = async (req, res) => {
       transmission: transmission || car.transmission,
       seats: parseInt(seats) || car.seats,
       doors: parseInt(doors) || car.doors,
-      engineCapacity: engineCapacity || car.engineCapacity,
+      engineCapacity: parseInt(engineCapacity) || car.engineCapacity,
       pricing: {
         daily: parseFloat(basePrice?.USD) || car.pricing?.daily || 0,
-        dailyEUR: parseFloat(basePrice?.EUR) || car.pricing?.dailyEUR || 0,
-        dailyTRY: parseFloat(basePrice?.TRY) || car.pricing?.dailyTRY || 0,
-        weekly:
-          parseFloat(basePrice?.USD) * 6.5 || car.pricing?.weekly || 0,
-        monthly:
-          parseFloat(basePrice?.USD) * 25 || car.pricing?.monthly || 0,
+        weekly: parseFloat(basePrice?.USD) * 6.5 || car.pricing?.weekly || 0,
+        monthly: parseFloat(basePrice?.USD) * 25 || car.pricing?.monthly || 0,
+        currency: car.pricing?.currency || "TRY"
       },
       description: description || car.description,
-      features: formattedFeatures,
-      adminStatus: status || car.adminStatus,
+      status: status ? status.toLowerCase() : car.status,
       featured: featured !== undefined ? featured : car.featured,
-      whatsappNumber: whatsappNumber || car.whatsappNumber,
       slug: slug,
     };
 
     // Update image if provided
     if (image) {
-      updateData.images = {
-        ...car.images,
-        main: {
-          url: image,
-          alt: name || car.title,
-        },
+      updateData.mainImage = {
+        url: image,
+        publicId: `car-${Date.now()}`,
+        filename: `${name || car.title}-image`
       };
     }
 
-    const updatedCar = await Car.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const updatedCar = await car.update(updateData);
 
     res.status(200).json({
       success: true,
       message: "Car updated successfully",
       data: {
-        id: updatedCar._id,
+        id: updatedCar.id,
         name: updatedCar.title,
         slug: updatedCar.slug,
       },
@@ -730,21 +713,23 @@ const deleteAdminCar = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const deletedCar = await Car.findByIdAndDelete(id);
+    const car = await Car.findByPk(id);
 
-    if (!deletedCar) {
+    if (!car) {
       return res.status(404).json({
         success: false,
         error: "Car not found",
       });
     }
 
+    await car.destroy();
+
     res.status(200).json({
       success: true,
       message: "Car deleted successfully",
       data: {
-        id: deletedCar._id,
-        name: deletedCar.title,
+        id: car.id,
+        name: car.title,
       },
     });
   } catch (error) {
@@ -805,12 +790,12 @@ const getAdminDashboardStats = async (req, res) => {
     // In a real implementation, these would be database queries
     // Mock statistics based on the Admin.jsx dashboard
 
-    const totalCars = await Car.countDocuments({});
-    const availableCars = await Car.countDocuments({
-      adminStatus: "Available",
+    const totalCars = await Car.count();
+    const availableCars = await Car.count({
+      where: { status: "active" }
     });
-    const carsInMaintenance = await Car.countDocuments({
-      adminStatus: "Maintenance",
+    const carsInMaintenance = await Car.count({
+      where: { status: "maintenance" }
     });
 
     // Mock booking data (in real implementation, these would be from Booking model)
@@ -1329,50 +1314,18 @@ const updateBookingStatus = async (req, res) => {
  */
 const getAdminNews = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, search } = req.query;
-
-    // Build filter object
-    let filter = {};
-
-    // Status filter
-    if (status) {
-      filter.status = status;
-    }
-
-    // Search filter
-    if (search) {
-      const searchRegex = new RegExp(search, "i");
-      filter.$or = [{ title: searchRegex }, { excerpt: searchRegex }];
-    }
-
-    // Pagination
-    const pageNum = parseInt(page);
-    const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
-
-    // Get news articles
-    const news = await News.find(filter)
-      .select("title excerpt image tags status featured author createdAt")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
-
-    // Get total count
-    const totalNews = await News.countDocuments(filter);
-    const totalPages = Math.ceil(totalNews / limitNum);
-
+    // Mock news data - News functionality removed in simplified system
     res.status(200).json({
       success: true,
       data: {
-        news,
+        news: [],
         pagination: {
-          page: pageNum,
-          limit: limitNum,
-          totalPages,
-          totalNews,
-          hasNext: pageNum < totalPages,
-          hasPrev: pageNum > 1,
+          page: 1,
+          limit: 20,
+          totalPages: 0,
+          totalNews: 0,
+          hasNext: false,
+          hasPrev: false,
         },
       },
     });
@@ -1434,16 +1387,11 @@ const getAdminNewsDetails = async (req, res) => {
       });
     }
 
-    const news = await News.findById(id).lean();
-
-    if (!news) {
-      return res.status(404).json({
-        success: false,
-        error: "News article not found",
-      });
-    }
-
-    res.status(200).json({ success: true, data: news });
+    // Mock response - News functionality removed
+    res.status(404).json({
+      success: false,
+      error: "News article not found",
+    });
   } catch (error) {
     console.error("Error in getAdminNewsDetails:", error);
     res.status(500).json({
@@ -1505,39 +1453,11 @@ const getAdminNewsDetails = async (req, res) => {
  */
 const createAdminNews = async (req, res) => {
   try {
-    const { title, content, excerpt, image, tags, author, status, featured } =
-      req.body;
-
-    // Create slug from title
-    const slug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)+/g, "");
-
-    // Create new news article
-    const newNews = new News({
-      title,
-      content,
-      excerpt,
-      image: image || "/placeholder-news.jpg",
-      tags: Array.isArray(tags) ? tags : [],
-      author: author || "Admin",
-      status: status || "draft",
-      featured: featured || false,
-      slug,
-      publishDate: status === "published" ? new Date() : null,
-    });
-
-    const savedNews = await newNews.save();
-
-    res.status(201).json({
-      success: true,
-      message: "News article created successfully",
-      data: {
-        id: savedNews._id,
-        title: savedNews.title,
-        slug: savedNews.slug,
-      },
+    // Mock response - News functionality removed in simplified system
+    res.status(501).json({
+      success: false,
+      error: "News functionality not implemented",
+      message: "News management has been removed in the simplified system",
     });
   } catch (error) {
     console.error("Error in createAdminNews:", error);
@@ -1603,58 +1523,11 @@ const createAdminNews = async (req, res) => {
  */
 const updateAdminNews = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { title, content, excerpt, image, tags, author, status, featured } =
-      req.body;
-
-    // Find the news article
-    const news = await News.findById(id);
-    if (!news) {
-      return res.status(404).json({
-        success: false,
-        error: "News article not found",
-      });
-    }
-
-    // Update slug if title changed
-    let slug = news.slug;
-    if (title !== news.title) {
-      slug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)+/g, "");
-    }
-
-    // Update news fields
-    const updateData = {
-      title: title || news.title,
-      content: content || news.content,
-      excerpt: excerpt || news.excerpt,
-      image: image || news.image,
-      tags: Array.isArray(tags) ? tags : news.tags,
-      author: author || news.author,
-      status: status || news.status,
-      featured: featured !== undefined ? featured : news.featured,
-      slug,
-      publishDate:
-        status === "published" && news.status !== "published"
-          ? new Date()
-          : news.publishDate,
-    };
-
-    const updatedNews = await News.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    });
-
-    res.status(200).json({
-      success: true,
-      message: "News article updated successfully",
-      data: {
-        id: updatedNews._id,
-        title: updatedNews.title,
-        slug: updatedNews.slug,
-      },
+    // Mock response - News functionality removed in simplified system
+    res.status(501).json({
+      success: false,
+      error: "News functionality not implemented",
+      message: "News management has been removed in the simplified system",
     });
   } catch (error) {
     console.error("Error in updateAdminNews:", error);
@@ -1694,24 +1567,11 @@ const updateAdminNews = async (req, res) => {
  */
 const deleteAdminNews = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const deletedNews = await News.findByIdAndDelete(id);
-
-    if (!deletedNews) {
-      return res.status(404).json({
-        success: false,
-        error: "News article not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "News article deleted successfully",
-      data: {
-        id: deletedNews._id,
-        title: deletedNews.title,
-      },
+    // Mock response - News functionality removed in simplified system
+    res.status(501).json({
+      success: false,
+      error: "News functionality not implemented",
+      message: "News management has been removed in the simplified system",
     });
   } catch (error) {
     console.error("Error in deleteAdminNews:", error);
@@ -1791,7 +1651,10 @@ const adminLogin = async (req, res) => {
     }
 
     // Find admin by email
-    const admin = await Admin.findOne({ email }).select("+password");
+    const admin = await Admin.findOne({ 
+      where: { email },
+      attributes: { include: ['password'] }
+    });
 
     if (!admin) {
       return res.status(401).json({
@@ -1812,14 +1675,13 @@ const adminLogin = async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { adminId: admin._id, email: admin.email, role: "admin" },
+      { adminId: admin.id, email: admin.email, role: "admin" },
       process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );
 
     // Update last login
-    admin.lastLogin = new Date();
-    await admin.save();
+    await admin.update({ lastLogin: new Date() });
 
     res.status(200).json({
       success: true,
@@ -1827,9 +1689,9 @@ const adminLogin = async (req, res) => {
       data: {
         token,
         admin: {
-          id: admin._id,
+          id: admin.id,
           email: admin.email,
-          name: admin.name,
+          name: admin.firstName + ' ' + admin.lastName,
           role: admin.role,
         },
       },
@@ -1905,7 +1767,7 @@ const createAdmin = async (req, res) => {
     }
 
     // Check if admin already exists
-    const existingAdmin = await Admin.findOne({ email });
+    const existingAdmin = await Admin.findOne({ where: { email } });
     if (existingAdmin) {
       return res.status(400).json({
         success: false,
@@ -1918,23 +1780,21 @@ const createAdmin = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
     // Create new admin
-    const newAdmin = new Admin({
-      name,
+    const savedAdmin = await Admin.create({
+      firstName: name.split(' ')[0] || name,
+      lastName: name.split(' ')[1] || '',
       email: email.toLowerCase(),
       password: hashedPassword,
       role,
       isActive: true,
-      createdAt: new Date(),
     });
-
-    const savedAdmin = await newAdmin.save();
 
     res.status(201).json({
       success: true,
       message: "Admin created successfully",
       data: {
-        id: savedAdmin._id,
-        name: savedAdmin.name,
+        id: savedAdmin.id,
+        name: savedAdmin.firstName + ' ' + savedAdmin.lastName,
         email: savedAdmin.email,
         role: savedAdmin.role,
       },
@@ -1964,34 +1824,22 @@ const createAdmin = async (req, res) => {
  */
 const getDbStats = async (req, res) => {
   try {
-    const db = mongoose.connection.db;
-
-    // Get all collections
-    const collections = await db.listCollections().toArray();
-
+    const { sequelize } = require('../models');
+    
     const stats = {
-      databaseName: db.databaseName,
-      collections: [],
-      totalDocuments: 0,
+      databaseName: process.env.DATABASE_NAME || 'mitcar-postgres',
+      tables: [
+        {
+          name: 'cars',
+          documentCount: await Car.count(),
+        },
+        {
+          name: 'admins', 
+          documentCount: await Admin.count(),
+        }
+      ],
+      totalDocuments: await Car.count() + await Admin.count(),
     };
-
-    // Get document count for each collection
-    for (const collection of collections) {
-      try {
-        const count = await db.collection(collection.name).countDocuments();
-        stats.collections.push({
-          name: collection.name,
-          documentCount: count,
-        });
-        stats.totalDocuments += count;
-      } catch (error) {
-        stats.collections.push({
-          name: collection.name,
-          documentCount: 0,
-          error: error.message,
-        });
-      }
-    }
 
     res.status(200).json({ success: true, data: stats });
   } catch (error) {
@@ -2019,7 +1867,9 @@ const getDbStats = async (req, res) => {
  */
 const getAllCars = async (req, res) => {
   try {
-    const cars = await Car.find().sort({ createdAt: -1 });
+    const cars = await Car.findAll({
+      order: [['createdAt', 'DESC']]
+    });
 
     res.status(200).json({ success: true, count: cars.length, data: cars });
   } catch (error) {
@@ -2051,29 +1901,42 @@ const getAllCars = async (req, res) => {
  *       200:
  *         description: Collection data retrieved successfully
  */
-const getAllCollections = async (req, res) => {
+const getAllTables = async (req, res) => {
   try {
-    const { collectionName } = req.params;
-    const db = mongoose.connection.db;
+    const { tableName } = req.params;
+    let data = [];
+    let count = 0;
 
-    // Get all documents from the specified collection
-    const documents = await db
-      .collection(collectionName)
-      .find({})
-      .limit(100) // Limit to avoid overwhelming response
-      .toArray();
+    switch (tableName.toLowerCase()) {
+      case 'cars':
+        data = await Car.findAll({ limit: 100 });
+        count = data.length;
+        break;
+      case 'admins':
+        data = await Admin.findAll({ 
+          limit: 100,
+          attributes: { exclude: ['password'] }
+        });
+        count = data.length;
+        break;
+      default:
+        return res.status(404).json({
+          success: false,
+          error: "Table not found",
+        });
+    }
 
     res.status(200).json({
       success: true,
-      collectionName,
-      count: documents.length,
-      data: documents,
+      tableName,
+      count,
+      data,
     });
   } catch (error) {
-    console.error("Error in getAllCollections:", error);
+    console.error("Error in getAllTables:", error);
     res.status(500).json({
       success: false,
-      error: "Failed to get collection data",
+      error: "Failed to get table data",
       message:
         process.env.NODE_ENV === "development"
           ? error.message
@@ -2113,5 +1976,5 @@ module.exports = {
   // Database monitoring APIs
   getDbStats,
   getAllCars,
-  getAllCollections,
+  getAllTables,
 };

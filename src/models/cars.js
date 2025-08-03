@@ -1,731 +1,297 @@
-// src/models/Car.js - Genişletilmiş Araç Modeli
-const mongoose = require("mongoose");
+// src/models/Car.js - PostgreSQL Car Model (Simplified for Specified Fields Only)
+const { DataTypes } = require("sequelize");
+const { sequelize } = require("../config/database");
 
-const carSchema = new mongoose.Schema(
+const Car = sequelize.define(
+  "Car",
   {
-    // Temel Bilgiler
-    order: {
-      type: Number,
-      default: 0,
-      index: true,
+    id: {
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
+      primaryKey: true,
     },
+
+    // Car Title (Required)
     title: {
-      type: String,
-      required: [true, "Car title is required"],
-      trim: true,
+      type: DataTypes.STRING(200),
+      allowNull: false,
+      validate: {
+        notEmpty: { msg: "Car title is required" },
+        len: { args: [5, 200], msg: "Title must be between 5-200 characters" },
+      },
     },
 
-    // Kategori (Admin panelden görülen kategoriler)
-    category: {
-      type: String,
-      required: [true, "Car category is required"],
-      enum: ["Ekonomik", "Orta Sınıf", "Üst Sınıf", "SUV", "Geniş", "Lüks"],
-      default: "Ekonomik",
-    },
-
-    // Marka ve Model
-    brand: {
-      type: String,
-      required: [true, "Car brand is required"],
-      trim: true,
-      enum: [
-        "Alfa Romeo",
-        "Aston Martin",
-        "Audi",
-        "Bentley",
-        "BMW",
-        "Chery",
-        "Chevrolet",
-        "Chrysler",
-        "Citroën",
-        "Dacia",
-        "Daihatsu",
-        "Dodge",
-        "DS Automobiles",
-        "Eagle",
-        "Ferrari",
-        "Fiat",
-        "Ford",
-        "GAZ",
-        "Geely",
-        "Honda",
-        "Hyundai",
-        "Ikco",
-        "Infiniti",
-        "Jaguar",
-        "Kia",
-        "Lada",
-        "Lamborghini",
-        "Lancia",
-        "Lexus",
-        "Mazda",
-        "Mercedes - Benz",
-        "MG",
-        "Mini",
-        "Mitsubishi",
-        "Moskwitsch",
-        "Nissan",
-        "Opel",
-        "Peugeot",
-        "Plymouth",
-        "Pontiac",
-        "Porsche",
-        "Proton",
-        "Renault",
-        "Rover",
-        "Saab",
-        "Seat",
-        "Skoda",
-        "Subaru",
-        "Suzuki",
-        "Tata",
-        "Tesla",
-        "Tofas",
-        "Toyota",
-        "Volkswagen",
-        "Volvo",
-        "Acura",
-        "DFM",
-        "GMC",
-        "Hummer",
-        "Isuzu",
-        "Jeep",
-        "Land Rover",
-        "Mahindra",
-        "Ssangyong",
-        "BMC",
-        "Ford - Otosan",
-        "Iveco - Otoyol",
-        "Karsan",
-        "Magirus",
-        "Temsa",
-        "Iveco",
-        "Bedford",
-        "DAF",
-        "DFSK",
-        "FAW",
-        "HFKanuni",
-        "Mitsubishi - Temsa",
-        "Scania",
-      ],
-    },
-    model: {
-      type: String,
-      required: [true, "Car model is required"],
-      trim: true,
-    },
-
-    // Model Yılı
+    // Year (Required)
     year: {
-      type: Number,
-      required: [true, "Car year is required"],
-      min: [1979, "Year must be after 1979"],
-      max: [new Date().getFullYear() + 1, "Year cannot be in the future"],
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      validate: {
+        min: { args: 1980, msg: "Year must be after 1980" },
+        max: {
+          args: new Date().getFullYear() + 1,
+          msg: "Year cannot be in the future",
+        },
+      },
     },
 
-    // Teknik Özellikler
+    // Brand (Required)
+    brand: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      validate: {
+        notEmpty: { msg: "Brand is required" },
+      },
+    },
+
+    // Model (Required)
+    model: {
+      type: DataTypes.STRING(100),
+      allowNull: false,
+      validate: {
+        notEmpty: { msg: "Model is required" },
+      },
+    },
+
+    // Category (Required)
+    category: {
+      type: DataTypes.ENUM(
+        "Ekonomik",
+        "Orta Sınıf",
+        "Üst Sınıf",
+        "SUV",
+        "Geniş",
+        "Lüks"
+      ),
+      allowNull: false,
+      defaultValue: "Ekonomik",
+    },
+
+    // Body Type (Required)
+    bodyType: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      defaultValue: "Sedan",
+    },
+
+    // Seats (Required)
+    seats: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 5,
+      validate: {
+        min: { args: 2, msg: "Seats cannot be less than 2" },
+        max: { args: 50, msg: "Seats cannot be more than 50" },
+      },
+    },
+
+    // Doors (Required)
+    doors: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 4,
+      validate: {
+        min: { args: 2, msg: "Doors cannot be less than 2" },
+        max: { args: 6, msg: "Doors cannot be more than 6" },
+      },
+    },
+
+    // Engine (cc) (Optional)
+    engineCapacity: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      validate: {
+        min: { args: 500, msg: "Engine capacity cannot be less than 500cc" },
+        max: {
+          args: 10000,
+          msg: "Engine capacity cannot be more than 10000cc",
+        },
+      },
+    },
+
+    // Transmission (Required)
+    transmission: {
+      type: DataTypes.ENUM("Manuel", "Yarı Otomatik", "Otomatik"),
+      allowNull: false,
+      defaultValue: "Manuel",
+    },
+
+    // Fuel Type (Required)
     fuelType: {
-      type: String,
-      required: [true, "Fuel type is required"],
-      enum: [
-        "Belirtilmemiş",
+      type: DataTypes.ENUM(
         "Benzin",
         "Dizel",
         "Benzin+LPG",
         "Elektrikli",
-        "Hibrit",
-      ],
-      default: "Belirtilmemiş",
-    },
-    transmission: {
-      type: String,
-      required: [true, "Transmission type is required"],
-      enum: ["Belirtilmemiş", "Manuel", "Yarı Otomatik", "Otomatik"],
-      default: "Belirtilmemiş",
-    },
-    bodyType: {
-      type: String,
-      required: [true, "Body type is required"],
-      enum: [
-        "Belirtilmemiş",
-        "Sedan",
-        "Hatchback",
-        "Suv",
-        "Station Wagon",
-        "Kombi",
-        "Panelvan",
-        "Minivan",
-        "Minivan & Panelvan",
-        "Pickup",
-        "Otobüs",
-        "Kamyonet",
-        "Kamyon",
-        "Convertible",
-        "Coupe",
-        "Exotic Cars",
-        "Truck",
-        "Sports Car",
-        "SUV",
-      ],
-      default: "Belirtilmemiş",
+        "Hibrit"
+      ),
+      allowNull: false,
+      defaultValue: "Benzin",
     },
 
-    // Additional fields for frontend compatibility
-    seats: {
-      type: Number,
-      default: 5,
-      min: [2, "Seats cannot be less than 2"],
-      max: [50, "Seats cannot be more than 50"],
-    },
-    doors: {
-      type: Number,
-      default: 4,
-      min: [2, "Doors cannot be less than 2"],
-      max: [6, "Doors cannot be more than 6"],
-    },
-    engineCapacity: {
-      type: Number,
-      min: [500, "Engine capacity cannot be less than 500cc"],
-      max: [10000, "Engine capacity cannot be more than 10000cc"],
-    },
-
-    // Yaş ve Ehliyet Gereksinimleri
-    minDriverAge: {
-      type: Number,
-      default: 21,
-      min: [18, "Minimum driver age cannot be less than 18"],
-    },
-    minLicenseYear: {
-      type: Number,
-      default: 1,
-      min: [0, "Minimum license year cannot be negative"],
-    },
-
-    // Resimler
-    images: {
-      // Ana listeleme görseli
-      main: {
-        url: String,
-        publicId: String,
-        filename: String,
-      },
-      // Galeri resimleri
-      gallery: [
-        {
-          url: String,
-          publicId: String,
-          filename: String,
-          caption: String,
-          order: {
-            type: Number,
-            default: 0,
-          },
-        },
-      ],
-    },
-
-    // Durum Bilgileri
-    status: {
-      type: Boolean,
-      default: true,
-    },
-    featured: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-    showInCampaigns: {
-      type: Boolean,
-      default: false,
-      index: true,
-    },
-
-    // Inventory Management
-    inventory: {
-      totalUnits: {
-        type: Number,
-        default: 1,
-        min: [0, "Total units cannot be negative"],
-        required: [true, "Total units is required"],
-      },
-      availableUnits: {
-        type: Number,
-        default: 1,
-        min: [0, "Available units cannot be negative"],
-      },
-      rentedUnits: {
-        type: Number,
-        default: 0,
-        min: [0, "Rented units cannot be negative"],
-      },
-      maintenanceUnits: {
-        type: Number,
-        default: 0,
-        min: [0, "Maintenance units cannot be negative"],
-      },
-      outOfServiceUnits: {
-        type: Number,
-        default: 0,
-        min: [0, "Out of service units cannot be negative"],
-      },
-    },
-
-    // Fiyatlandırma - Genel
-    pricing: {
-      daily: {
-        type: Number,
-        required: [true, "Daily price is required"],
-        min: [0, "Price cannot be negative"],
-      },
-      weekly: {
-        type: Number,
-        min: [0, "Price cannot be negative"],
-      },
-      monthly: {
-        type: Number,
-        min: [0, "Price cannot be negative"],
-      },
-    },
-
-    // Dönemsel Fiyatlandırma
-    seasonalPricing: [
-      {
-        startDate: {
-          type: Date,
-          required: true,
-        },
-        endDate: {
-          type: Date,
-          required: true,
-        },
-        daily: {
-          type: Number,
-          min: [0, "Price cannot be negative"],
-        },
-        weekly: {
-          type: Number,
-          min: [0, "Price cannot be negative"],
-        },
-        monthly: {
-          type: Number,
-          min: [0, "Price cannot be negative"],
-        },
-        name: {
-          type: String,
-          trim: true,
+    // Main Image (Optional) - Single image object
+    mainImage: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: null,
+      validate: {
+        isValidImageStructure(value) {  
+          if (value && typeof value === "object") {
+            if (!value.url || !value.publicId) {
+              throw new Error("Main image must have url and publicId");
+            }
+          }
         },
       },
-    ],
-
-    // Km Limitleri
-    kmLimits: {
-      daily: {
-        type: Number,
-        default: 300,
-        min: [0, "Km limit cannot be negative"],
-      },
-      weekly: {
-        type: Number,
-        default: 2100,
-        min: [0, "Km limit cannot be negative"],
-      },
-      monthly: {
-        type: Number,
-        default: 9000,
-        min: [0, "Km limit cannot be negative"],
-      },
     },
 
-    // Para Birimi
-    currency: {
-      type: String,
-      default: "TRY",
-      enum: ["TRY", "USD", "EUR"],
-    },
-
-    // Özellikler ve Donanımlar
-    features: [
-      {
-        name: String,
-        icon: String,
-        category: {
-          type: String,
-          enum: ["safety", "comfort", "technology", "performance"],
-        },
-      },
-    ],
-
-    // Açıklama
+    // Description (Optional)
     description: {
-      type: String,
-      trim: true,
-      maxlength: [2000, "Description cannot exceed 2000 characters"],
-    },
-
-    // Konum ve Teslim
-    availableLocations: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Location",
-      },
-    ],
-
-    // WhatsApp Contact Info
-    whatsappNumber: {
-      type: String,
-      default: process.env.DEFAULT_WHATSAPP || "+905366039907",
-      trim: true,
-    },
-    whatsappMessage: {
-      type: String,
-      default: function () {
-        return `Merhaba! ${this.brand} ${this.model} (${this.year}) aracını kiralamak istiyorum. Detaylı bilgi alabilir miyim?`;
+      type: DataTypes.TEXT,
+      allowNull: true,
+      validate: {
+        len: {
+          args: [0, 2000],
+          msg: "Description cannot exceed 2000 characters",
+        },
       },
     },
 
-    // SEO
+    // Daily/Weekly/Monthly Rate Pricing (Required)
+    pricing: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {
+        daily: 0,
+        weekly: 0,
+        monthly: 0,
+        currency: "TRY",
+      },
+      validate: {
+        isValidPricing(value) {
+          if (!value || !value.daily || value.daily <= 0) {
+            throw new Error("Daily price is required and must be positive");
+          }
+        },
+      },
+    },
+
+    // System fields for basic functionality
     slug: {
-      type: String,
-      unique: true,
-      lowercase: true,
-      trim: true,
-      index: true,
-    },
-    metaDescription: {
-      type: String,
-      maxlength: [160, "Meta description cannot exceed 160 characters"],
-    },
-    keywords: [String],
-
-    // Çok Dilli Destek
-    translations: {
-      en: {
-        title: String,
-        description: String,
-        metaDescription: String,
+      type: DataTypes.STRING(250),
+      allowNull: false,
+      unique: {
+        msg: "Slug must be unique",
       },
-      tr: {
-        title: String,
-        description: String,
-        metaDescription: String,
-      },
+      defaultValue: "temp-slug",
     },
 
-    // İstatistikler
-    stats: {
-      viewCount: {
-        type: Number,
-        default: 0,
-      },
-      reservationCount: {
-        type: Number,
-        default: 0,
-      },
-      rating: {
-        average: {
-          type: Number,
-          default: 0,
-          min: 0,
-          max: 5,
-        },
-        count: {
-          type: Number,
-          default: 0,
-        },
-      },
+    status: {
+      type: DataTypes.ENUM("active", "inactive", "maintenance"),
+      allowNull: false,
+      defaultValue: "active",
     },
 
-    // Timestamps
-    createdAt: {
-      type: Date,
-      default: Date.now,
+    featured: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    updatedAt: {
-      type: Date,
-      default: Date.now,
+
+    // Foreign Key to Admin
+    userId: {
+      type: DataTypes.UUID,
+      allowNull: false,
+      references: {
+        model: "admins",
+        key: "id",
+      },
+      onDelete: "CASCADE",
     },
   },
   {
-    timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    tableName: "cars",
+    indexes: [
+      { fields: ["userId"] },
+      { fields: ["status"] },
+      { fields: ["featured"] },
+      { fields: ["brand", "model"] },
+      { fields: ["category"] },
+      { fields: ["slug"] },
+      { fields: ['"pricing"'], using: "gin" }, // JSONB index
+      { fields: ['"mainImage"'], using: "gin" }, // JSONB index
+    ],
+    hooks: {
+      beforeCreate: async (car) => {
+        // Generate slug if not exists
+        if (!car.slug) {
+          const baseSlug = car.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "");
+
+          const timestamp = Date.now().toString(36);
+          car.slug = `${baseSlug}-${timestamp}`;
+        }
+
+        // Auto-calculate weekly/monthly prices if not set
+        if (car.pricing && car.pricing.daily) {
+          if (!car.pricing.weekly || car.pricing.weekly === 0) {
+            car.pricing.weekly = car.pricing.daily * 6;
+          }
+          if (!car.pricing.monthly || car.pricing.monthly === 0) {
+            car.pricing.monthly = car.pricing.daily * 25;
+          }
+        }
+      },
+      beforeUpdate: async (car) => {
+        // Generate new slug if title changed
+        if (car.changed("title")) {
+          const baseSlug = car.title
+            .toLowerCase()
+            .replace(/[^a-z0-9]/g, "-")
+            .replace(/-+/g, "-")
+            .replace(/^-|-$/g, "");
+
+          const timestamp = Date.now().toString(36);
+          car.slug = `${baseSlug}-${timestamp}`;
+        }
+
+        // Auto-calculate weekly/monthly prices if not set
+        if (car.pricing && car.pricing.daily) {
+          if (!car.pricing.weekly || car.pricing.weekly === 0) {
+            car.pricing.weekly = car.pricing.daily * 6;
+          }
+          if (!car.pricing.monthly || car.pricing.monthly === 0) {
+            car.pricing.monthly = car.pricing.daily * 25;
+          }
+        }
+      },
+    },
   }
 );
 
-// Indexes for performance
-carSchema.index({ category: 1, status: 1 });
-carSchema.index({ brand: 1, model: 1 });
-carSchema.index({ "pricing.daily": 1 });
-carSchema.index({ featured: -1, order: 1 });
-carSchema.index({ availableLocations: 1 });
-carSchema.index({ createdAt: -1 });
-carSchema.index({ "stats.rating.average": -1 });
-
-// Virtual for full car name
-carSchema.virtual("fullName").get(function () {
-  return `${this.brand} ${this.model} (${this.year})`;
-});
-
-// Virtual for WhatsApp link
-carSchema.virtual("whatsappLink").get(function () {
-  const message = encodeURIComponent(this.whatsappMessage);
-  const cleanNumber = this.whatsappNumber.replace(/[^0-9]/g, "");
-  return `https://wa.me/${cleanNumber}?text=${message}`;
-});
-
-// Virtual for availability status
-carSchema.virtual("availabilityStatus").get(function () {
-  const { totalUnits, availableUnits, rentedUnits } = this.inventory;
-
-  if (availableUnits === 0) {
-    return "Fully Booked";
-  } else if (availableUnits <= totalUnits * 0.2) {
-    return "Limited Availability";
-  } else {
-    return "Available";
-  }
-});
-
-// Virtual for current price (seasonal check)
-carSchema.virtual("currentPrice").get(function () {
-  const now = new Date();
-
-  // Check for seasonal pricing
-  const activeSeasonal = this.seasonalPricing.find(
-    (season) => season.startDate <= now && season.endDate >= now
-  );
-
-  if (activeSeasonal) {
-    return {
-      daily: activeSeasonal.daily || this.pricing.daily,
-      weekly: activeSeasonal.weekly || this.pricing.weekly,
-      monthly: activeSeasonal.monthly || this.pricing.monthly,
-      seasonal: true,
-      seasonName: activeSeasonal.name,
-    };
-  }
-
-  return {
-    daily: this.pricing.daily,
-    weekly: this.pricing.weekly,
-    monthly: this.pricing.monthly,
-    seasonal: false,
-  };
-});
-
-// Pre-save middleware
-carSchema.pre("save", function (next) {
-  // Generate unique slug if not exists or if title/brand/model changed
-  if (
-    this.isModified("title") ||
-    this.isModified("brand") ||
-    this.isModified("model") ||
-    !this.slug
-  ) {
-    const slugBase = this.title || `${this.brand}-${this.model}-${this.year}`;
-    let baseSlug = slugBase
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-
-    // Make slug unique by adding timestamp or random suffix
-    const timestamp = Date.now().toString(36);
-    this.slug = `${baseSlug}-${timestamp}`;
-  }
-
-  // Update timestamp
-  this.updatedAt = Date.now();
-
-  // Validate and auto-correct inventory
-  if (this.isModified("inventory") || this.isNew) {
-    const inv = this.inventory;
-
-    // Auto-calculate availableUnits if not set
-    if (inv.availableUnits === undefined || inv.availableUnits === null) {
-      inv.availableUnits =
-        inv.totalUnits -
-        (inv.rentedUnits + inv.maintenanceUnits + inv.outOfServiceUnits);
-    }
-
-    // Validate total units equation
-    const totalUsed =
-      inv.rentedUnits +
-      inv.maintenanceUnits +
-      inv.outOfServiceUnits +
-      inv.availableUnits;
-    if (totalUsed !== inv.totalUnits) {
-      // Auto-adjust availableUnits to match
-      inv.availableUnits =
-        inv.totalUnits -
-        (inv.rentedUnits + inv.maintenanceUnits + inv.outOfServiceUnits);
-
-      if (inv.availableUnits < 0) {
-        return next(new Error("Inventory units cannot exceed total units"));
-      }
-    }
-  }
-
-  // Calculate weekly/monthly prices if not set
-  if (this.pricing.daily && !this.pricing.weekly) {
-    this.pricing.weekly = this.pricing.daily * 6; // 6 day discount for weekly
-  }
-  if (this.pricing.daily && !this.pricing.monthly) {
-    this.pricing.monthly = this.pricing.daily * 25; // 25 day discount for monthly
-  }
-
-  next();
-});
-
-// Static method to search cars with filters
-carSchema.statics.searchCars = function (query) {
-  const {
-    category,
-    brand,
-    model,
-    minPrice,
-    maxPrice,
-    transmission,
-    fuelType,
-    bodyType,
-    location,
-    featured,
-    year,
-    page = 1,
-    limit = 12,
-    sortBy = "order",
-  } = query;
-
-  let filter = { status: true };
-
-  // Category filter
-  if (category && category !== "all") {
-    filter.category = category;
-  }
-
-  // Brand filter
-  if (brand && brand !== "all") {
-    filter.brand = brand;
-  }
-
-  // Model filter
-  if (model && model !== "all") {
-    filter.model = model;
-  }
-
-  // Price range filter
-  if (minPrice || maxPrice) {
-    filter["pricing.daily"] = {};
-    if (minPrice) filter["pricing.daily"].$gte = Number(minPrice);
-    if (maxPrice) filter["pricing.daily"].$lte = Number(maxPrice);
-  }
-
-  // Technical specs filters
-  if (transmission && transmission !== "all")
-    filter.transmission = transmission;
-  if (fuelType && fuelType !== "all") filter.fuelType = fuelType;
-  if (bodyType && bodyType !== "all") filter.bodyType = bodyType;
-  if (year) filter.year = Number(year);
-
-  // Location filter
-  if (location) {
-    filter.availableLocations = location;
-  }
-
-  // Featured filter
-  if (featured === "true") {
-    filter.featured = true;
-  }
-
-  // Sorting options
-  let sort = {};
-  switch (sortBy) {
-    case "price-low":
-      sort = { "pricing.daily": 1, order: 1 };
-      break;
-    case "price-high":
-      sort = { "pricing.daily": -1, order: 1 };
-      break;
-    case "newest":
-      sort = { createdAt: -1 };
-      break;
-    case "rating":
-      sort = { "stats.rating.average": -1, order: 1 };
-      break;
-    case "popular":
-      sort = { "stats.viewCount": -1, order: 1 };
-      break;
-    default:
-      sort = { featured: -1, order: 1, createdAt: -1 };
-  }
-
-  const skip = (Number(page) - 1) * Number(limit);
-
-  return this.find(filter)
-    .populate("availableLocations", "name")
-    .sort(sort)
-    .skip(skip)
-    .limit(Number(limit));
+// Instance methods
+Car.prototype.getMainImageUrl = function () {
+  return this.mainImage?.url || null;
 };
 
-// Static method to get available filters
-carSchema.statics.getFilters = function () {
-  return Promise.all([
-    this.distinct("category", { status: true }),
-    this.distinct("brand", { status: true }),
-    this.distinct("transmission", { status: true }),
-    this.distinct("fuelType", { status: true }),
-    this.distinct("bodyType", { status: true }),
-    this.aggregate([
-      { $match: { status: true } },
-      {
-        $group: {
-          _id: null,
-          minPrice: { $min: "$pricing.daily" },
-          maxPrice: { $max: "$pricing.daily" },
-        },
-      },
-    ]),
-  ]).then(
-    ([
-      categories,
-      brands,
-      transmissions,
-      fuelTypes,
-      bodyTypes,
-      priceRange,
-    ]) => ({
-      categories: categories.sort(),
-      brands: brands.sort(),
-      transmissions: transmissions.filter((t) => t !== "Belirtilmemiş").sort(),
-      fuelTypes: fuelTypes.filter((f) => f !== "Belirtilmemiş").sort(),
-      bodyTypes: bodyTypes.filter((b) => b !== "Belirtilmemiş").sort(),
-      priceRange: priceRange[0] || { minPrice: 0, maxPrice: 1000 },
-    })
-  );
-};
-
-// Instance method to get formatted price
-carSchema.methods.getFormattedPrice = function (period = "daily") {
+Car.prototype.getFormattedPrice = function (period = "daily") {
   const currencySymbols = {
     TRY: "₺",
     USD: "$",
     EUR: "€",
   };
 
-  const currentPrice = this.currentPrice;
-  const price = currentPrice[period];
-  const symbol = currencySymbols[this.currency] || "₺";
+  const price = this.pricing[period];
+  const symbol = currencySymbols[this.pricing.currency] || "₺";
+  const periodText =
+    period === "daily" ? "gün" : period === "weekly" ? "hafta" : "ay";
 
-  return `${symbol}${price}/${
-    period === "daily" ? "gün" : period === "weekly" ? "hafta" : "ay"
-  }`;
+  return `${symbol}${price}/${periodText}`;
 };
 
-// Instance method to increment view count
-carSchema.methods.incrementViewCount = function () {
-  this.stats.viewCount += 1;
-  return this.save();
+Car.prototype.getFullName = function () {
+  return `${this.brand} ${this.model} (${this.year})`;
 };
 
-module.exports = mongoose.model("Car", carSchema);
+module.exports = Car;
