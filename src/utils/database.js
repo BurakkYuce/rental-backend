@@ -1,33 +1,7 @@
-// src/utils/database.js
-const mongoose = require("mongoose");
+// src/utils/database.js - PostgreSQL Database Utilities
+// This file is kept for compatibility but PostgreSQL connection is handled in src/config/database.js
 
-const connectDB = async () => {
-  try {
-    // Deprecated options'ları kaldırdık
-    const conn = await mongoose.connect(process.env.MONGODB_URI);
+const { connectDB } = require('../config/database');
 
-    console.log(`✅ MongoDB Connected: ${conn.connection.host}`);
-    console.log(`📦 Database: ${conn.connection.name}`);
-
-    // Connection events
-    mongoose.connection.on("error", (err) => {
-      console.error("❌ MongoDB connection error:", err);
-    });
-
-    mongoose.connection.on("disconnected", () => {
-      console.log("⚠️  MongoDB disconnected");
-    });
-
-    // Graceful shutdown
-    process.on("SIGINT", async () => {
-      await mongoose.connection.close();
-      console.log("👋 MongoDB connection closed due to app termination");
-      process.exit(0);
-    });
-  } catch (error) {
-    console.error("❌ Database connection failed:", error);
-    process.exit(1);
-  }
-};
-
+// Re-export the PostgreSQL connection function for backward compatibility
 module.exports = connectDB;
