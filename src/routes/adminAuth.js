@@ -452,6 +452,7 @@ router.post('/cars', adminAuth, async (req, res) => {
       engineCapacity: req.body.engineCapacity || req.body.engine_capacity || null,
       description: req.body.description || '',
       mainImage: req.body.mainImage || req.body.images?.main || null,
+      gallery: req.body.gallery || req.body.images?.gallery || [],
       pricing: {
         daily: Math.max(parseFloat(req.body.pricing?.daily || req.body.dailyRate || req.body.daily) || 100, 1),
         weekly: Math.max(parseFloat(req.body.pricing?.weekly || req.body.weeklyRate) || 0, 0),
@@ -535,7 +536,8 @@ router.put('/cars/:id', adminAuth, async (req, res) => {
       doors: req.body.doors,
       engineCapacity: req.body.engineCapacity,
       description: req.body.description,
-      mainImage: req.body.mainImage,
+      mainImage: req.body.mainImage || req.body.images?.main,
+      gallery: req.body.gallery || req.body.images?.gallery,
       pricing: {
         daily: parseFloat(req.body.pricing?.daily) || car.pricing.daily,
         weekly: parseFloat(req.body.pricing?.weekly) || car.pricing.weekly,
@@ -616,6 +618,91 @@ router.delete('/cars/:id', adminAuth, async (req, res) => {
     console.error('❌ Failed to delete car:', error);
     res.status(500).json({
       error: 'Failed to delete car',
+      message: error.message
+    });
+  }
+});
+
+// Update car status
+/**
+ * @swagger
+ * /api/admin/cars/{id}/status:
+ *   patch:
+ *     summary: Update car status (active/inactive)
+ *     tags: [Admin Cars]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Car ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive]
+ *                 description: New status for the car
+ *     responses:
+ *       200:
+ *         description: Car status updated successfully
+ *       403:
+ *         description: Access denied
+ *       404:
+ *         description: Car not found
+ */
+router.patch('/cars/:id/status', adminAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    
+    // Validate status
+    if (!status || !['active', 'inactive'].includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid status',
+        message: 'Status must be either "active" or "inactive"'
+      });
+    }
+    
+    // Find the car first
+    const car = await Car.findByPk(id);
+    if (!car) {
+      return res.status(404).json({
+        error: 'Car not found',
+        message: 'No car found with the provided ID'
+      });
+    }
+    
+    // Check if user owns this car or is admin
+    if (car.userId !== req.admin.id && req.admin.role !== 'super_admin') {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'You can only update status of your own cars'
+      });
+    }
+    
+    // Update the car status
+    await car.update({ status });
+    
+    res.json({
+      success: true,
+      message: `Car status updated to ${status}`,
+      data: {
+        id: car.id,
+        status: car.status
+      }
+    });
+  } catch (error) {
+    console.error('❌ Failed to update car status:', error);
+    res.status(500).json({
+      error: 'Failed to update car status',
       message: error.message
     });
   }
@@ -721,6 +808,8 @@ router.patch('/blogs/:id/status', adminAuth, async (req, res) => {
   }
 });
 
+// DISABLED: This route conflicts with proper admin blog routes in /admin/blogs
+/*
 router.post('/blogs', adminAuth, async (req, res) => {
   try {
     // Log UI interaction
@@ -767,6 +856,7 @@ router.post('/blogs', adminAuth, async (req, res) => {
     });
   }
 });
+*/
 
 router.get('/blogs/:id', adminAuth, async (req, res) => {
   const { id } = req.params;

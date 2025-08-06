@@ -20,7 +20,7 @@ const {
 const {
   adminLogin,
   createAdmin,
-} = require("../controllers/authController");
+} = require("../controllers/adminAuthController");
 
 const { upload } = require("../utils/cloudinary");
 const auth = require("../middleware/auth");

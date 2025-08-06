@@ -2,23 +2,41 @@
 const Car = require("../models/cars");
 const Location = require("../models/Location");
 const { uploadImage, deleteImage } = require("../utils/cloudinary");
+const { uploadImageLocally, deleteImageLocally } = require("../utils/localFileUpload");
 
 // @desc    Get all cars with filters
 // @route   GET /api/cars
 // @access  Public
 exports.getAllCars = async (req, res) => {
   try {
-    const cars = await Car.searchCars(req.query);
-
-    // Get total count for pagination
-    const totalQuery = { ...req.query };
-    delete totalQuery.page;
-    delete totalQuery.limit;
-    const totalCars = await Car.countDocuments();
-
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 12;
-    const totalPages = Math.ceil(totalCars / limit);
+    const offset = (page - 1) * limit;
+
+    // Build where conditions based on query parameters
+    const where = { status: 'active' };
+    
+    if (req.query.category) {
+      where.category = req.query.category;
+    }
+    if (req.query.brand) {
+      where.brand = req.query.brand;
+    }
+    if (req.query.minPrice || req.query.maxPrice) {
+      where.pricing = {};
+      if (req.query.minPrice) where.pricing.daily = { $gte: Number(req.query.minPrice) };
+      if (req.query.maxPrice) where.pricing.daily = { $lte: Number(req.query.maxPrice) };
+    }
+
+    // Get cars with pagination
+    const { count, rows: cars } = await Car.findAndCountAll({
+      where,
+      limit,
+      offset,
+      order: [['featured', 'DESC'], ['created_at', 'DESC']]
+    });
+
+    const totalPages = Math.ceil(count / limit);
 
     res.json({
       success: true,
@@ -27,7 +45,7 @@ exports.getAllCars = async (req, res) => {
         page,
         limit,
         totalPages,
-        totalCars,
+        totalCars: count,
         hasNext: page < totalPages,
         hasPrev: page > 1,
       },
@@ -69,7 +87,7 @@ exports.getPopularCars = async (req, res) => {
 // @access  Public
 exports.generateWhatsAppLink = async (req, res) => {
   try {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findByPk(req.params.id);
 
     if (!car) {
       return res.status(404).json({
@@ -223,7 +241,7 @@ exports.updateCar = async (req, res) => {
 // @access  Private/Admin
 exports.deleteCar = async (req, res) => {
   try {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findByPk(req.params.id);
 
     if (!car) {
       return res.status(404).json({
@@ -232,20 +250,20 @@ exports.deleteCar = async (req, res) => {
       });
     }
 
-    // Delete images from Cloudinary
-    if (car.images.main && car.images.main.publicId) {
-      await deleteImage(car.images.main.publicId);
+    // Delete images from Cloudinary/local storage
+    if (car.mainImage && car.mainImage.publicId) {
+      await deleteImage(car.mainImage.publicId);
     }
 
-    if (car.images.gallery && car.images.gallery.length > 0) {
-      for (const image of car.images.gallery) {
+    if (car.gallery && car.gallery.length > 0) {
+      for (const image of car.gallery) {
         if (image.publicId) {
           await deleteImage(image.publicId);
         }
       }
     }
 
-    await car.deleteOne();
+    await car.destroy();
 
     res.json({
       success: true,
@@ -264,7 +282,7 @@ exports.deleteCar = async (req, res) => {
 // @access  Private/Admin
 exports.uploadCarImages = async (req, res) => {
   try {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findByPk(req.params.id);
 
     if (!car) {
       return res.status(404).json({
@@ -282,29 +300,48 @@ exports.uploadCarImages = async (req, res) => {
       });
     }
 
-    // Upload to Cloudinary
-    const uploadResult = await uploadImage(
-      req.file.path,
-      `rentaly/cars/${car._id}`
-    );
+    // Check if Cloudinary is configured
+    const isCloudinaryConfigured = process.env.CLOUDINARY_CLOUD_NAME && 
+                                   process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloud_name_here';
+    
+    let uploadResult;
+    if (isCloudinaryConfigured) {
+      console.log('📤 Uploading car image to Cloudinary...');
+      try {
+        uploadResult = await uploadImage(req.file.buffer, {
+          original_filename: req.file.originalname,
+          folder: `rentaly/cars/${car._id}`
+        });
+      } catch (cloudError) {
+        console.log('⚠️ Cloudinary upload failed, falling back to local storage...');
+        uploadResult = await uploadImageLocally(req.file.buffer, req.file.originalname);
+      }
+    } else {
+      console.log('📤 Uploading car image locally (Cloudinary not configured)...');
+      uploadResult = await uploadImageLocally(req.file.buffer, req.file.originalname);
+    }
 
     const imageData = {
-      url: uploadResult.secure_url,
-      publicId: uploadResult.public_id,
-      filename: req.file.filename,
+      url: uploadResult.url,
+      publicId: uploadResult.publicId,
+      filename: req.file.originalname,
     };
 
     if (imageType === "main") {
       // Delete old main image if exists
-      if (car.images.main && car.images.main.publicId) {
-        await deleteImage(car.images.main.publicId);
+      if (car.mainImage && car.mainImage.publicId) {
+        await deleteImage(car.mainImage.publicId);
       }
-      car.images.main = imageData;
+      car.mainImage = imageData;
     } else {
       // Add to gallery
-      car.images.gallery.push({
+      if (!car.gallery) {
+        car.gallery = [];
+      }
+      car.gallery.push({
         ...imageData,
-        order: car.images.gallery.length,
+        order: car.gallery.length,
+        id: Date.now(), // Simple ID for gallery images
       });
     }
 
@@ -328,7 +365,7 @@ exports.uploadCarImages = async (req, res) => {
 // @access  Private/Admin
 exports.deleteCarImage = async (req, res) => {
   try {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findByPk(req.params.id);
 
     if (!car) {
       return res.status(404).json({
@@ -341,21 +378,21 @@ exports.deleteCarImage = async (req, res) => {
     const { imageType } = req.query; // 'main' or 'gallery'
 
     if (imageType === "main") {
-      if (car.images.main && car.images.main.publicId) {
-        await deleteImage(car.images.main.publicId);
-        car.images.main = undefined;
+      if (car.mainImage && car.mainImage.publicId) {
+        await deleteImage(car.mainImage.publicId);
+        car.mainImage = null;
       }
     } else {
-      const imageIndex = car.images.gallery.findIndex(
-        (img) => img._id.toString() === imageId || img.publicId === imageId
+      const imageIndex = car.gallery.findIndex(
+        (img) => img.id.toString() === imageId || img.publicId === imageId
       );
 
       if (imageIndex > -1) {
-        const image = car.images.gallery[imageIndex];
+        const image = car.gallery[imageIndex];
         if (image.publicId) {
           await deleteImage(image.publicId);
         }
-        car.images.gallery.splice(imageIndex, 1);
+        car.gallery.splice(imageIndex, 1);
       }
     }
 
@@ -540,7 +577,7 @@ exports.getCarStatistics = async (req, res) => {
 // @access  Public
 exports.getSimilarCars = async (req, res) => {
   try {
-    const car = await Car.findById(req.params.id);
+    const car = await Car.findByPk(req.params.id);
 
     if (!car) {
       return res.status(404).json({
@@ -616,10 +653,25 @@ exports.getFeaturedCars = async (req, res) => {
 // @access  Public
 exports.getCar = async (req, res) => {
   try {
-    const car = await Car.findOne({
-      $or: [{ _id: req.params.id }, { slug: req.params.id }],
-      status: true,
-    }).populate("availableLocations", "name city address contact");
+    const { id } = req.params;
+    
+    // Try to find by ID first, then by slug
+    let car = await Car.findOne({
+      where: {
+        id: id,
+        status: 'active'
+      }
+    });
+
+    // If not found by ID, try by slug
+    if (!car) {
+      car = await Car.findOne({
+        where: {
+          slug: id,
+          status: 'active'
+        }
+      });
+    }
 
     if (!car) {
       return res.status(404).json({
@@ -627,9 +679,6 @@ exports.getCar = async (req, res) => {
         error: "Car not found",
       });
     }
-
-    // Increment view count
-    await car.incrementViewCount();
 
     res.json({
       success: true,
@@ -657,7 +706,14 @@ exports.searchCars = async (req, res) => {
       query.location = location;
     }
 
-    const cars = await Car.searchCars(query);
+    // Build where conditions for search
+    const where = { status: 'active' };
+    
+    if (query.category) where.category = query.category;
+    if (query.brand) where.brand = query.brand;
+    if (location) where.location = location;
+    
+    const cars = await Car.findAll({ where });
 
     // Filter by availability if dates provided
     let availableCars = cars;

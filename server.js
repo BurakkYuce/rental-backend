@@ -14,7 +14,9 @@ const { connectDB: connectPostgreSQL } = require("./src/config/database");
 const listingRoutes = require("./src/routes/listings");
 const imageUploadRoutes = require("./src/routes/imageUpload");
 const adminAuthRoutes = require("./src/routes/adminAuth");
+const adminRoutes = require("./src/routes/admin");
 const blogRoutes = require("./src/routes/blog");
+const carRoutes = require("./src/routes/cars");
 
 // Minimal compatibility routes for frontend
 const minimalCompatRoutes = require("./src/routes/minimal-compat");
@@ -76,6 +78,7 @@ app.use((req, res, next) => {
 
 // Static files
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+app.use(express.static(path.join(__dirname)));
 
 // Swagger Documentation
 app.use(
@@ -91,8 +94,9 @@ app.use(
 // API Routes - PostgreSQL routes
 app.use("/api/listings", listingRoutes);
 app.use("/api/images", imageUploadRoutes);
-app.use("/api/auth", adminAuthRoutes);
-app.use("/api/admin", adminAuthRoutes);
+app.use("/api/cars", carRoutes);
+app.use("/api", adminAuthRoutes);
+app.use("/api/admin", adminRoutes);
 app.use("/api", blogRoutes);
 
 // Use minimal compatibility routes for missing endpoints

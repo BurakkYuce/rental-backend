@@ -134,10 +134,29 @@ const Car = sequelize.define(
       allowNull: true,
       defaultValue: null,
       validate: {
-        isValidImageStructure(value) {  
+        isValidImageStructure(value) {
           if (value && typeof value === "object") {
-            if (!value.url || !value.publicId) {
-              throw new Error("Main image must have url and publicId");
+            if (!value.url) {
+              throw new Error("Main image must have url");
+            }
+            // publicId is optional for local uploads
+          }
+        },
+      },
+    },
+
+    // Gallery Images (Optional) - Array of image objects
+    gallery: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      validate: {
+        isValidGalleryStructure(value) {
+          if (value && Array.isArray(value)) {
+            for (const img of value) {
+              if (img && typeof img === "object" && !img.url) {
+                throw new Error("Gallery image must have url");
+              }
             }
           }
         },
@@ -218,6 +237,7 @@ const Car = sequelize.define(
       { fields: ["slug"] },
       { fields: ['"pricing"'], using: "gin" }, // JSONB index
       { fields: ['"mainImage"'], using: "gin" }, // JSONB index
+      { fields: ['"gallery"'], using: "gin" }, // JSONB index
     ],
     hooks: {
       beforeCreate: async (car) => {
@@ -236,10 +256,10 @@ const Car = sequelize.define(
         // Auto-calculate weekly/monthly prices if not set
         if (car.pricing && car.pricing.daily) {
           if (!car.pricing.weekly || car.pricing.weekly === 0) {
-            car.pricing.weekly = car.pricing.daily * 6;
+            car.pricing.weekly = car.pricing.daily * 7;
           }
           if (!car.pricing.monthly || car.pricing.monthly === 0) {
-            car.pricing.monthly = car.pricing.daily * 25;
+            car.pricing.monthly = car.pricing.daily * 30;
           }
         }
       },
@@ -270,28 +290,28 @@ const Car = sequelize.define(
   }
 );
 
-// Instance methods
-Car.prototype.getMainImageUrl = function () {
-  return this.mainImage?.url || null;
-};
-
-Car.prototype.getFormattedPrice = function (period = "daily") {
-  const currencySymbols = {
-    TRY: "₺",
-    USD: "$",
-    EUR: "€",
+  // Instance methods
+  Car.prototype.getMainImageUrl = function () {
+    return this.mainImage?.url || null;
   };
 
-  const price = this.pricing[period];
-  const symbol = currencySymbols[this.pricing.currency] || "₺";
-  const periodText =
-    period === "daily" ? "gün" : period === "weekly" ? "hafta" : "ay";
+  Car.prototype.getFormattedPrice = function (period = "daily") {
+    const currencySymbols = {
+      TRY: "₺",
+      USD: "$",
+      EUR: "€",
+    };
 
-  return `${symbol}${price}/${periodText}`;
-};
+    const price = this.pricing[period];
+    const symbol = currencySymbols[this.pricing.currency] || "₺";
+    const periodText =
+      period === "daily" ? "gün" : period === "weekly" ? "hafta" : "ay";
 
-Car.prototype.getFullName = function () {
-  return `${this.brand} ${this.model} (${this.year})`;
-};
+    return `${symbol}${price}/${periodText}`;
+  };
 
-module.exports = Car;
+  Car.prototype.getFullName = function () {
+    return `${this.brand} ${this.model} (${this.year})`;
+  };
+
+  module.exports = Car;

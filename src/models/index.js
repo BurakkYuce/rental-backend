@@ -21,7 +21,8 @@ try {
 }
 
 try {
-  Blog = require("./Blog");
+  const BlogFunction = require("./Blog");
+  Blog = BlogFunction(sequelize);
   console.log("✅ Blog model loaded:", typeof Blog, Blog.name);
 } catch (error) {
   console.error("❌ Error loading Blog model:", error.message);

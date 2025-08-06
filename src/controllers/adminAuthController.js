@@ -108,7 +108,7 @@ const adminLogin = async (req, res) => {
     });
 
   } catch (error) {
-    logError(error, { context: 'Admin login', username, ip: req.ip });
+    logError(error, { context: 'Admin login', username: req.body?.username, ip: req.ip });
     res.status(500).json({
       error: 'Server Error',
       message: 'An error occurred during login'

@@ -433,7 +433,6 @@ exports.searchBlogs = async (req, res) => {
 // @desc    Get all blogs for admin (with all statuses)
 // @route   GET /api/admin/blogs
 // @access  Private (Admin)
-// Debug version of getAdminBlogs - Add this temporarily
 exports.getAdminBlogs = async (req, res) => {
   try {
     const validationError = handleValidationErrors(req, res);
@@ -441,23 +440,9 @@ exports.getAdminBlogs = async (req, res) => {
 
     const { page = 1, limit = 20, status, search, featured, tag } = req.query;
 
-    console.log("🔍 === BLOG DEBUG START ===");
     console.log("🔍 Admin blog query params:", req.query);
-    console.log("🔍 req.admin:", req.admin);
-    console.log("🔍 req.user:", req.user);
-    console.log("🔍 Admin ID:", req.admin?.id || req.user?.id);
 
-    // Count ALL blogs in database first
-    const totalBlogsInDB = await Blog.count();
-    console.log("🔍 Total blogs in database:", totalBlogsInDB);
-
-    // Count by status
-    const draftCount = await Blog.count({ where: { status: "draft" } });
-    const publishedCount = await Blog.count({ where: { status: "published" } });
-    console.log("🔍 Draft blogs:", draftCount);
-    console.log("🔍 Published blogs:", publishedCount);
-
-    // Build where clause - REMOVE userId filter temporarily for debugging
+    // Build where clause
     let where = {};
 
     if (status) {
@@ -485,8 +470,7 @@ exports.getAdminBlogs = async (req, res) => {
     const limitNum = parseInt(limit);
     const offset = (pageNum - 1) * limitNum;
 
-    console.log("🔍 Final where clause:", JSON.stringify(where, null, 2));
-    console.log("🔍 Query params:", { page: pageNum, limit: limitNum, offset });
+    console.log("🔍 Where clause:", JSON.stringify(where, null, 2));
 
     const { rows: blogs, count: totalBlogs } = await Blog.findAndCountAll({
       where,
@@ -495,19 +479,9 @@ exports.getAdminBlogs = async (req, res) => {
       limit: limitNum,
     });
 
-    console.log("🔍 Query results:", { blogCount: blogs.length, totalBlogs });
     console.log(
-      "🔍 First blog:",
-      blogs[0]
-        ? {
-            id: blogs[0].id,
-            title: blogs[0].title,
-            status: blogs[0].status,
-            userId: blogs[0].userId,
-          }
-        : "No blogs found"
+      `✅ Found ${blogs.length} admin blogs out of ${totalBlogs} total`
     );
-    console.log("🔍 === BLOG DEBUG END ===");
 
     const totalPages = Math.ceil(totalBlogs / limitNum);
 
@@ -537,6 +511,7 @@ exports.getAdminBlogs = async (req, res) => {
     });
   }
 };
+
 // @desc    Get single blog for admin editing
 // @route   GET /api/admin/blogs/:id
 // @access  Private (Admin)
@@ -594,28 +569,51 @@ exports.getAdminBlog = async (req, res) => {
 // @route   POST /api/admin/blogs
 // @access  Private (Admin)
 exports.createBlog = async (req, res) => {
+  console.log("🚨 === CREATE BLOG CONTROLLER HIT ===");
+  console.log("🚨 Request method:", req.method);
+  console.log("🚨 Request URL:", req.url);
+  console.log("🚨 Request body:", JSON.stringify(req.body, null, 2));
+
   try {
     const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
+    if (validationError) {
+      console.log("❌ Validation failed:", validationError);
+      return validationError;
+    }
 
     const {
       title,
       content,
       excerpt,
-      image,
       status = "draft",
       featured = false,
       tags = [],
-      author = "Admin",
       category = "Company News",
+      slug,
+      featuredImage,
+      author,
+      image,
     } = req.body;
 
-    console.log("🔄 Creating blog with data:", {
+    // FIXED: Handle different author formats
+    let authorName = "Admin";
+    if (typeof author === "object" && author?.name) {
+      authorName = author.name;
+    } else if (typeof author === "string" && author.trim()) {
+      authorName = author;
+    }
+
+    // FIXED: Handle image from either featuredImage object or direct image field
+    const imageUrl = featuredImage?.url || image || null;
+
+    console.log("🔄 Processing blog data:", {
       title,
+      authorName,
       status,
       featured,
       tags,
       category,
+      hasImage: !!imageUrl,
     });
 
     // Validate required fields
@@ -630,24 +628,49 @@ exports.createBlog = async (req, res) => {
     const userId =
       req.admin?.id || req.user?.id || "00000000-0000-0000-0000-000000000000";
 
+    // FIXED: Generate slug from title if not provided
+    const finalSlug =
+      slug ||
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
+
     const blogData = {
       title: title.trim(),
       content: content.trim(),
       excerpt: excerpt?.trim() || content.substring(0, 200) + "...",
-      image,
+      slug: finalSlug,
+      image: imageUrl,
       status,
       featured: Boolean(featured),
       tags: Array.isArray(tags) ? tags.filter((tag) => tag && tag.trim()) : [],
-      author,
+      author: authorName,
       category,
       userId,
+      publishDate: status === "published" ? new Date() : null,
+      viewCount: 0,
     };
 
-    console.log("🔄 Final blog data:", blogData);
+    console.log("🔄 Final blog data to create:", blogData);
 
     const blog = await Blog.create(blogData);
 
-    console.log("✅ Blog created successfully:", blog.id);
+    if (!blog) {
+      console.error("❌ Blog.create returned null/undefined");
+      return res.status(500).json({
+        success: false,
+        error: "Failed to create blog - creation returned null",
+      });
+    }
+
+    console.log("✅ Blog created successfully:");
+    console.log(`   ID: ${blog.id}`);
+    console.log(`   Title: ${blog.title}`);
+    console.log(`   Slug: ${blog.slug}`);
+    console.log(`   Status: ${blog.status}`);
 
     res.status(201).json({
       success: true,
@@ -656,6 +679,18 @@ exports.createBlog = async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error in createBlog:", error);
+    console.error("❌ Error stack:", error.stack);
+
+    // Check for unique constraint violations
+    if (error.name === "SequelizeUniqueConstraintError") {
+      return res.status(400).json({
+        success: false,
+        error:
+          "A blog with this slug already exists. Please use a different title.",
+        field: "slug",
+      });
+    }
+
     res.status(500).json({
       success: false,
       error: "Failed to create blog",
@@ -690,12 +725,33 @@ exports.updateBlog = async (req, res) => {
       });
     }
 
+    // FIXED: Handle author field properly
+    if (updateData.author) {
+      if (typeof updateData.author === "object" && updateData.author.name) {
+        updateData.author = updateData.author.name;
+      }
+    }
+
+    // FIXED: Handle featuredImage field
+    if (
+      updateData.featuredImage &&
+      typeof updateData.featuredImage === "object"
+    ) {
+      updateData.image = updateData.featuredImage.url || updateData.image;
+      delete updateData.featuredImage;
+    }
+
     // Clean up update data
     if (updateData.title) updateData.title = updateData.title.trim();
     if (updateData.content) updateData.content = updateData.content.trim();
     if (updateData.excerpt) updateData.excerpt = updateData.excerpt.trim();
     if (updateData.tags && Array.isArray(updateData.tags)) {
       updateData.tags = updateData.tags.filter((tag) => tag && tag.trim());
+    }
+
+    // Update publish date if changing to published
+    if (updateData.status === "published" && blog.status !== "published") {
+      updateData.publishDate = new Date();
     }
 
     await blog.update(updateData);
