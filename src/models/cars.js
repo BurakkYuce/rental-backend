@@ -175,6 +175,32 @@ const Car = sequelize.define(
       },
     },
 
+    // Features (Optional) - Array of feature objects
+    features: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      validate: {
+        isValidFeaturesStructure(value) {
+          if (value && Array.isArray(value)) {
+            for (const feature of value) {
+              if (typeof feature === "string") {
+                // Allow simple string features
+                continue;
+              }
+              if (feature && typeof feature === "object") {
+                if (!feature.name) {
+                  throw new Error("Feature object must have name property");
+                }
+              } else {
+                throw new Error("Features must be strings or objects with name property");
+              }
+            }
+          }
+        },
+      },
+    },
+
     // Daily/Weekly/Monthly Rate Pricing (Required)
     pricing: {
       type: DataTypes.JSONB,
@@ -218,7 +244,7 @@ const Car = sequelize.define(
     // Foreign Key to Admin
     userId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true, // Allow null like Blog model
       references: {
         model: "admins",
         key: "id",

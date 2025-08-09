@@ -17,10 +17,14 @@ const ensureUploadsDir = async () => {
   }
 };
 
-// Generate unique filename
+// Generate unique filename - fix special characters
 const generateFilename = (originalName) => {
   const ext = path.extname(originalName);
-  const name = path.basename(originalName, ext);
+  const name = path.basename(originalName, ext)
+    .replace(/[^a-zA-Z0-9-_]/g, '_') // Replace special chars with underscore
+    .replace(/_+/g, '_') // Replace multiple underscores with single
+    .replace(/^_|_$/g, '') // Remove leading/trailing underscores
+    .toLowerCase(); // Make lowercase for consistency
   const timestamp = Date.now();
   const hash = crypto.randomBytes(8).toString('hex');
   return `${name}-${timestamp}-${hash}${ext}`;

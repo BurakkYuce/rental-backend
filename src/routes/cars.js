@@ -7,9 +7,9 @@ const {
   searchCars,
   getCarsByCategory,
   getFilters,
-  createCar,
-  updateCar,
-  deleteCar,
+  createAdminCar,
+  updateAdminCar,
+  deleteAdminCar,
   uploadCarImages,
   deleteCarImage,
   updateCarStatus,
@@ -232,9 +232,9 @@ router.get("/locations", getLocations);
 // Protected routes (Admin only) - require authentication for admin operations
 
 // Admin car management (simplified without complex validation for now)
-router.post("/", createCar);
-router.put("/:id", updateCar);
-router.delete("/:id", deleteCar);
+router.post("/", createAdminCar);
+router.put("/:id", updateAdminCar);
+router.delete("/:id", deleteAdminCar);
 
 // Image management (simplified)
 router.post("/:id/images", upload.single("image"), uploadCarImages);

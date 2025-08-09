@@ -69,77 +69,12 @@ const listingValid = isValidSequelizeModel(Listing, "Listing");
 // Define relationships only if models are valid
 console.log("\n🔗 Setting up model relationships...");
 
-// Admin -> Car relationship
-if (adminValid && carValid) {
-  try {
-    Admin.hasMany(Car, {
-      foreignKey: "userId",
-      as: "cars",
-      onDelete: "CASCADE",
-    });
+// Relationships are now handled via associate methods in individual models
+console.log("✅ Admin <-> Car relationships will be handled by associate methods");
 
-    Car.belongsTo(Admin, {
-      foreignKey: "userId",
-      as: "owner",
-    });
-    console.log("✅ Admin <-> Car relationships established");
-  } catch (error) {
-    console.error(
-      "❌ Error setting up Admin <-> Car relationships:",
-      error.message
-    );
-  }
-} else {
-  console.log("⚠️ Skipping Admin <-> Car relationships (models not valid)");
-}
-
-// Admin -> Blog relationship
-if (adminValid && blogValid) {
-  try {
-    Admin.hasMany(Blog, {
-      foreignKey: "userId",
-      as: "blogs",
-      onDelete: "CASCADE",
-    });
-
-    Blog.belongsTo(Admin, {
-      foreignKey: "userId",
-      as: "creator",
-    });
-    console.log("✅ Admin <-> Blog relationships established");
-  } catch (error) {
-    console.error(
-      "❌ Error setting up Admin <-> Blog relationships:",
-      error.message
-    );
-  }
-} else {
-  console.log("⚠️ Skipping Admin <-> Blog relationships (models not valid)");
-}
-
-// Admin -> Listing relationship
-if (adminValid && listingValid) {
-  try {
-    Admin.hasMany(Listing, {
-      foreignKey: "userId",
-      as: "listings",
-      onDelete: "CASCADE",
-    });
-
-    Listing.belongsTo(Admin, {
-      foreignKey: "userId",
-      as: "owner",
-    });
-    console.log("✅ Admin <-> Listing relationships established");
-  } catch (error) {
-    console.error(
-      "❌ Error setting up Admin <-> Listing relationships:",
-      error.message
-    );
-  }
-} else {
-  console.log("⚠️ Skipping Admin <-> Listing relationships (models not valid)");
-}
+// Relationships are now handled via associate methods in individual models
+console.log("✅ Admin <-> Blog relationships will be handled by associate methods");
+console.log("✅ Admin <-> Listing relationships will be handled by associate methods");
 
 // Call associate methods if they exist (for your Blog.associate function)
 console.log("\n🔄 Calling associate methods...");

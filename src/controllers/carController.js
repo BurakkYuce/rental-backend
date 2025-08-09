@@ -413,16 +413,15 @@ exports.deleteCarImage = async (req, res) => {
 // @desc    Update car status
 // @route   PATCH /api/cars/:id/status
 // @access  Private/Admin
-exports.updateCarStatus = async (req, res) => {
+const updateCarStatus = async (req, res) => {
   try {
     const { status } = req.body;
+    const { id } = req.params;
 
-    const car = await Car.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    );
+    console.log(`🔄 Updating car ${id} status to:`, status);
 
+    // Find existing car
+    const car = await Car.findByPk(id);
     if (!car) {
       return res.status(404).json({
         success: false,
@@ -430,12 +429,18 @@ exports.updateCarStatus = async (req, res) => {
       });
     }
 
+    // Update the status
+    await car.update({ status });
+
+    console.log(`✅ Car ${id} status updated to:`, status);
+
     res.json({
       success: true,
       data: car,
-      message: `Car ${status ? "activated" : "deactivated"} successfully`,
+      message: `Car status updated to ${status} successfully`,
     });
   } catch (error) {
+    console.error("Error in updateCarStatus:", error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1308,55 +1313,65 @@ const getAdminCars = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, status } = req.query;
 
-    // Build filter object
-    let filter = {};
+    // Build Sequelize where object
+    const where = {};
 
-    // Search filter
+    // Search filter using Sequelize Op.or
     if (search) {
-      const searchRegex = new RegExp(search, "i");
-      filter.$or = [
-        { title: searchRegex },
-        { brand: searchRegex },
-        { model: searchRegex },
+      const { Op } = require('sequelize');
+      where[Op.or] = [
+        { title: { [Op.iLike]: `%${search}%` } },
+        { brand: { [Op.iLike]: `%${search}%` } },
+        { model: { [Op.iLike]: `%${search}%` } },
       ];
     }
 
     // Status filter
     if (status) {
-      filter.adminStatus = status;
+      where.status = status;
     }
 
     // Pagination
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
-    const skip = (pageNum - 1) * limitNum;
+    const offset = (pageNum - 1) * limitNum;
 
-    // Get cars with full admin details
-    const cars = await Car.find(filter)
-      .select(
-        "title brand model year category fuelType transmission pricing images adminStatus featured whatsappNumber slug seats doors engineCapacity description features"
-      )
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
+    console.log("🔄 getAdminCars query parameters:", {
+      where: JSON.stringify(where),
+      limitNum,
+      offset,
+      pageNum
+    });
 
-    // Get total count
-    const totalCars = await Car.countDocuments(filter);
+    // Get cars with pagination using Sequelize
+    console.log("🚀 About to call Car.findAndCountAll...");
+    const { count: totalCars, rows: cars } = await Car.findAndCountAll({
+      where,
+      limit: limitNum,
+      offset,
+      order: [['created_at', 'DESC']],
+      attributes: [
+        'id', 'title', 'brand', 'model', 'year', 'category', 'fuelType', 
+        'transmission', 'pricing', 'mainImage', 'gallery', 'status', 'featured', 
+        'slug', 'seats', 'doors', 'engineCapacity', 'description', 'features'
+      ]
+    });
+    console.log(`✅ Car.findAndCountAll completed successfully: ${totalCars} cars found`);
+
     const totalPages = Math.ceil(totalCars / limitNum);
 
     // Transform cars for admin interface
     const transformedCars = cars.map((car) => ({
-      id: car._id,
+      id: car.id, // Sequelize uses 'id' not '_id'
       name: car.title,
-      type: car.category || "SUV",
-      status: car.adminStatus || "Available",
+      type: car.category || "SUV", 
+      status: car.status === "active" ? "Available" : "Unavailable", // Map ENUM to display text
       basePrice: {
         USD: car.pricing?.daily?.toString() || "",
-        EUR: car.pricing?.dailyEUR?.toString() || "",
-        TRY: car.pricing?.dailyTRY?.toString() || "",
+        EUR: car.pricing?.daily?.toString() || "", // Simplified for now
+        TRY: car.pricing?.daily?.toString() || "",
       },
-      image: car.images?.main?.url || "/placeholder-car.jpg",
+      image: car.mainImage?.url || "/placeholder-car.jpg",
       seats: car.seats || 5,
       transmission: car.transmission || "Automatic",
       fuelType: car.fuelType || "Petrol",
@@ -1364,7 +1379,7 @@ const getAdminCars = async (req, res) => {
       engineCapacity: car.engineCapacity || "",
       doors: car.doors || 4,
       description: car.description || "",
-      features: car.features?.map((f) => f.name) || [],
+      features: car.features || [], // Handle both string and object features
       createdAt: car.createdAt || new Date(),
       slug: car.slug,
     }));
@@ -1385,13 +1400,12 @@ const getAdminCars = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in getAdminCars:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       error: "Failed to fetch cars",
-      message:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Something went wrong",
+      message: error.message, // Always show the actual error for debugging
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
@@ -1460,7 +1474,9 @@ const getAdminCarDetails = async (req, res) => {
     }
 
     // Find existing car
-    car = await Car.findById(id).lean();
+    car = await Car.findByPk(id, {
+      raw: true,
+    });
 
     if (!car) {
       return res.status(404).json({
@@ -1469,9 +1485,9 @@ const getAdminCarDetails = async (req, res) => {
       });
     }
 
-    // Transform car data for admin editing in simplified format
+    // Transform car data for admin editing - FIXED: use same format as public API
     const transformedCar = {
-      id: car._id,
+      id: car.id,
       title: car.title || "",
       brand: car.brand || "",
       model: car.model || "",
@@ -1484,15 +1500,11 @@ const getAdminCarDetails = async (req, res) => {
         weekly: car.pricing?.weekly?.toString() || "",
         monthly: car.pricing?.monthly?.toString() || "",
       },
-      images: {
-        main: {
-          url: car.images?.main?.url || "",
-        },
-        gallery: car.images?.gallery || [],
-      },
+      mainImage: car.mainImage || null, // FIXED: direct field like public API
+      gallery: car.gallery || [], // FIXED: direct field like public API
       status: car.status !== undefined ? car.status : true,
       featured: car.featured || false,
-      features: car.features ? car.features.map(f => f.name || f) : [],
+      features: car.features || [],
       description: car.description || "",
       seats: car.seats?.toString() || "",
       doors: car.doors?.toString() || "",
@@ -1523,6 +1535,11 @@ const getAdminCarDetails = async (req, res) => {
  *       - bearerAuth: []
  */
 const createAdminCar = async (req, res) => {
+  console.log("🚨 === CREATE CAR CONTROLLER HIT ===");
+  console.log("🚨 Request method:", req.method);
+  console.log("🚨 Request URL:", req.url);
+  console.log("🚨 Request body:", JSON.stringify(req.body, null, 2));
+
   try {
     const {
       title,
@@ -1533,7 +1550,8 @@ const createAdminCar = async (req, res) => {
       fuelType,
       transmission,
       pricing,
-      images,
+      mainImage,
+      gallery,
       status,
       featured,
       features,
@@ -1542,10 +1560,9 @@ const createAdminCar = async (req, res) => {
       doors,
       engineCapacity,
       bodyType,
-      seasonalPricing
     } = req.body;
 
-    // Validate required fields
+    // Validate required fields (like blog does)
     if (!title || !pricing?.daily) {
       return res.status(400).json({
         success: false,
@@ -1553,90 +1570,70 @@ const createAdminCar = async (req, res) => {
       });
     }
 
-    // Create slug from title
-    const slug = title
+    // Get admin user ID (like blog does)
+    const userId = req.admin?.id || req.user?.id || null;
+
+    // Generate unique slug from title (like blog does)
+    const baseSlug = title
       .toLowerCase()
-      .replace(/[^a-zA-Z0-9\s]/g, "")
-      .replace(/\s+/g, "-");
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    
+    // Add timestamp to ensure uniqueness
+    const timestamp = Date.now().toString(36);
+    const finalSlug = `${baseSlug}-${timestamp}`;
 
-    // Map category to database enum values
-    const mapCategoryToEnum = (cat) => {
-      const categoryMap = {
-        "Sports Car": "Lüks",
-        "SUV": "SUV", 
-        "Sedan": "Orta Sınıf",
-        "Hatchback": "Ekonomik",
-        "Convertible": "Lüks",
-        "Coupe": "Üst Sınıf",
-        "Truck": "Geniş",
-        "Exotic Cars": "Lüks",
-        "Station Wagon": "Orta Sınıf",
-        "Minivan": "Geniş"
-      };
-      return categoryMap[cat] || cat || "Lüks";
-    };
+    // Handle mainImage exactly like blog handles featuredImage
+    const imageData = mainImage?.url ? {
+      url: mainImage.url,
+      alt: mainImage.alt || `${brand} ${model}`,
+      publicId: mainImage.publicId || ''
+    } : null;
 
-    // Create car object matching the simplified frontend structure
+    // Simple car data object (like blog does)
     const carData = {
-      title: title,
+      title: title.trim(),
       brand: brand || "BMW",
       model: model || "Model",
       year: year || new Date().getFullYear(),
-      category: mapCategoryToEnum(category),
+      category: category || "Lüks",
       bodyType: bodyType || "Sedan",
       fuelType: fuelType || "Benzin",
       transmission: transmission || "Otomatik",
       seats: seats ? parseInt(seats) : 5,
       doors: doors ? parseInt(doors) : 4,
-      engineCapacity: engineCapacity && engineCapacity !== "" ? parseInt(engineCapacity) : 2000,
+      engineCapacity: engineCapacity ? parseInt(engineCapacity) : null,
       description: description || "",
-
-      // Pricing - simplified structure
+      slug: finalSlug,
       pricing: {
-        daily: parseFloat(pricing.daily) || 0,
-        weekly: parseFloat(pricing.weekly) || parseFloat(pricing.daily) * 6,
-        monthly: parseFloat(pricing.monthly) || parseFloat(pricing.daily) * 25,
+        daily: parseFloat(pricing.daily),
+        weekly: parseFloat(pricing.weekly) || parseFloat(pricing.daily) * 7,
+        monthly: parseFloat(pricing.monthly) || parseFloat(pricing.daily) * 30,
+        currency: "TRY",
       },
-
-      // Images - simplified structure
-      images: {
-        main: {
-          url: images?.main?.url || "",
-        },
-        gallery: images?.gallery || [],
-      },
-
-      // Features - transform array of strings to array of objects
-      features: features ? features.map(feature => ({
-        name: feature,
-        icon: "",
-        category: "comfort"
-      })) : [],
-
-      // Status and featured
-      status: status !== undefined ? status : true,
-      featured: featured || false,
-
-      // SEO
-      slug: slug,
-
-      // Seasonal pricing
-      seasonalPricing: seasonalPricing ? seasonalPricing.map(sp => ({
-        startDate: new Date(sp.startDate),
-        endDate: new Date(sp.endDate),
-        daily: parseFloat(sp.daily) || 0,
-        weekly: parseFloat(sp.weekly) || 0,
-        monthly: parseFloat(sp.monthly) || 0,
-        name: sp.name || ""
-      })) : [],
-
-      // Metadata
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      mainImage: imageData,
+      gallery: gallery || [],
+      features: features || [],
+      status: status ? "active" : "inactive",
+      featured: Boolean(featured),
+      userId,
     };
 
-    // Save to database
+    console.log("🔄 Processing car data:", {
+      title,
+      brand,
+      status: carData.status,
+      featured: carData.featured,
+      hasMainImage: !!imageData,
+      featuresCount: features?.length || 0,
+    });
+
+    // Save to database (like blog does)
+    console.log("🚀 About to call Car.create...");
     const newCar = await Car.create(carData);
+    console.log("✅ Car.create completed successfully");
 
     res.status(201).json({
       success: true,
@@ -1645,13 +1642,12 @@ const createAdminCar = async (req, res) => {
     });
   } catch (error) {
     console.error("Error in createAdminCar:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       error: "Failed to create car",
-      message:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Something went wrong",
+      message: error.message,
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
@@ -1668,134 +1664,70 @@ const createAdminCar = async (req, res) => {
 const updateAdminCar = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      title,
-      brand,
-      model,
-      year,
-      category,
-      fuelType,
-      transmission,
-      pricing,
-      images,
-      status,
-      featured,
-      features,
-      description,
-      seats,
-      doors,
-      engineCapacity,
-      bodyType,
-      seasonalPricing
-    } = req.body;
+    const updateData = { ...req.body };
 
-    // Find existing car
-    const existingCar = await Car.findById(id);
-    if (!existingCar) {
+    console.log("🔄 Updating car:", id, "with data:", updateData);
+
+    // Find existing car (like blog does)
+    const car = await Car.findByPk(id);
+    if (!car) {
+      console.log("❌ Car not found for update:", id);
       return res.status(404).json({
         success: false,
         error: "Car not found",
       });
     }
 
-    // Create updated car data
-    const updateData = {};
-
-    // Map category to database enum values
-    const mapCategoryToEnum = (cat) => {
-      const categoryMap = {
-        "Sports Car": "Lüks",
-        "SUV": "SUV", 
-        "Sedan": "Orta Sınıf",
-        "Hatchback": "Ekonomik",
-        "Convertible": "Lüks",
-        "Coupe": "Üst Sınıf",
-        "Truck": "Geniş",
-        "Exotic Cars": "Lüks",
-        "Station Wagon": "Orta Sınıf",
-        "Minivan": "Geniş"
+    // Handle mainImage exactly like blog handles featuredImage
+    if (updateData.mainImage?.url) {
+      updateData.mainImage = {
+        url: updateData.mainImage.url,
+        alt: updateData.mainImage.alt || `${car.brand} ${car.model}`,
+        publicId: updateData.mainImage.publicId || ''
       };
-      return categoryMap[cat] || cat || "Lüks";
-    };
+    }
 
-    // Update basic fields
-    if (title !== undefined) {
-      updateData.title = title;
+    // Clean up update data (like blog does)
+    if (updateData.title) {
+      updateData.title = updateData.title.trim();
       // Update slug if title changed
-      if (title) {
-        updateData.slug = title
-          .toLowerCase()
-          .replace(/[^a-zA-Z0-9\s]/g, "")
-          .replace(/\s+/g, "-");
-      }
+      updateData.slug = updateData.title
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, "")
+        .replace(/\s+/g, "-")
+        .replace(/-+/g, "-")
+        .replace(/^-+|-+$/g, "");
     }
 
-    if (brand !== undefined) updateData.brand = brand;
-    if (model !== undefined) updateData.model = model;
-    if (year !== undefined) updateData.year = year;
-    if (category !== undefined) updateData.category = mapCategoryToEnum(category);
-    if (bodyType !== undefined) updateData.bodyType = bodyType;
-    if (fuelType !== undefined) updateData.fuelType = fuelType;
-    if (transmission !== undefined) updateData.transmission = transmission;
-    if (seats !== undefined) updateData.seats = parseInt(seats);
-    if (doors !== undefined) updateData.doors = parseInt(doors);
-    if (engineCapacity !== undefined && engineCapacity !== "") updateData.engineCapacity = parseInt(engineCapacity);
-    if (description !== undefined) updateData.description = description;
-    if (status !== undefined) updateData.status = status;
-    if (featured !== undefined) updateData.featured = featured;
+    // Handle numeric fields
+    if (updateData.year) updateData.year = parseInt(updateData.year);
+    if (updateData.seats) updateData.seats = parseInt(updateData.seats);
+    if (updateData.doors) updateData.doors = parseInt(updateData.doors);
+    if (updateData.engineCapacity) updateData.engineCapacity = parseInt(updateData.engineCapacity);
 
-    // Update pricing with simplified structure
-    if (pricing) {
+    // Handle pricing
+    if (updateData.pricing) {
       updateData.pricing = {
-        daily: pricing.daily ? parseFloat(pricing.daily) : existingCar.pricing?.daily || 0,
-        weekly: pricing.weekly ? parseFloat(pricing.weekly) : (pricing.daily ? parseFloat(pricing.daily) * 6 : existingCar.pricing?.weekly || 0),
-        monthly: pricing.monthly ? parseFloat(pricing.monthly) : (pricing.daily ? parseFloat(pricing.daily) * 25 : existingCar.pricing?.monthly || 0),
+        daily: parseFloat(updateData.pricing.daily),
+        weekly: parseFloat(updateData.pricing.weekly) || parseFloat(updateData.pricing.daily) * 7,
+        monthly: parseFloat(updateData.pricing.monthly) || parseFloat(updateData.pricing.daily) * 30,
+        currency: updateData.pricing.currency || "TRY",
       };
     }
 
-    // Update images with simplified structure
-    if (images) {
-      updateData.images = {
-        main: {
-          url: images.main?.url || existingCar.images?.main?.url || "",
-        },
-        gallery: images.gallery || existingCar.images?.gallery || [],
-      };
+    // Handle status conversion
+    if (updateData.status !== undefined) {
+      updateData.status = updateData.status ? "active" : "inactive";
     }
 
-    // Update features - transform array of strings to array of objects
-    if (features !== undefined) {
-      updateData.features = features ? features.map(feature => ({
-        name: feature,
-        icon: "",
-        category: "comfort"
-      })) : [];
-    }
+    // Update car in database (like blog does)
+    await car.update(updateData);
 
-    // Update seasonal pricing
-    if (seasonalPricing !== undefined) {
-      updateData.seasonalPricing = seasonalPricing ? seasonalPricing.map(sp => ({
-        startDate: new Date(sp.startDate),
-        endDate: new Date(sp.endDate),
-        daily: parseFloat(sp.daily) || 0,
-        weekly: parseFloat(sp.weekly) || 0,
-        monthly: parseFloat(sp.monthly) || 0,
-        name: sp.name || ""
-      })) : [];
-    }
+    console.log("✅ Car updated successfully");
 
-    updateData.updatedAt = new Date();
-
-    // Update car in database
-    const updatedCar = await Car.findByIdAndUpdate(
-      id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-
-    res.status(200).json({
+    res.json({
       success: true,
-      data: updatedCar,
+      data: car,
       message: "Car updated successfully",
     });
   } catch (error) {
@@ -1803,10 +1735,7 @@ const updateAdminCar = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to update car",
-      message:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Something went wrong",
+      message: error.message,
     });
   }
 };
@@ -1825,7 +1754,7 @@ const deleteAdminCar = async (req, res) => {
     const { id } = req.params;
 
     // Find existing car
-    const car = await Car.findById(id);
+    const car = await Car.findByPk(id);
     if (!car) {
       return res.status(404).json({
         success: false,
@@ -1835,12 +1764,12 @@ const deleteAdminCar = async (req, res) => {
 
     // Delete images from Cloudinary if they exist
     try {
-      if (car.images?.main?.publicId) {
-        await deleteImage(car.images.main.publicId);
+      if (car.mainImage?.publicId) {
+        await deleteImage(car.mainImage.publicId);
       }
 
-      if (car.images?.gallery && car.images.gallery.length > 0) {
-        for (const image of car.images.gallery) {
+      if (car.gallery && car.gallery.length > 0) {
+        for (const image of car.gallery) {
           if (image.publicId) {
             await deleteImage(image.publicId);
           }
@@ -1852,7 +1781,7 @@ const deleteAdminCar = async (req, res) => {
     }
 
     // Delete the car
-    await Car.findByIdAndDelete(id);
+    await car.destroy();
 
     res.status(200).json({
       success: true,
@@ -2087,6 +2016,7 @@ exports.getAdminCars = getAdminCars;
 exports.getAdminCarDetails = getAdminCarDetails;
 exports.createAdminCar = createAdminCar;
 exports.updateAdminCar = updateAdminCar;
+exports.updateCarStatus = updateCarStatus;
 exports.deleteAdminCar = deleteAdminCar;
 exports.getCarScheduledPricing = getCarScheduledPricing;
 exports.addCarScheduledPricing = addCarScheduledPricing;

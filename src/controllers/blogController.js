@@ -21,10 +21,6 @@ const handleValidationErrors = (req, res) => {
 // @access  Public
 exports.getBlogs = async (req, res) => {
   try {
-    // Handle validation errors
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const {
       page = 1,
       limit = 12,
@@ -151,9 +147,6 @@ exports.getBlogs = async (req, res) => {
 // @access  Public
 exports.getFeaturedBlogs = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const limit = parseInt(req.query.limit) || 6;
 
     console.log("🔍 Getting featured blogs, limit:", limit);
@@ -300,9 +293,6 @@ exports.getCategories = async (req, res) => {
 // @access  Public
 exports.getPopularTags = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const limit = parseInt(req.query.limit) || 20;
 
     console.log("🔍 Getting popular tags, limit:", limit);
@@ -351,9 +341,6 @@ exports.getPopularTags = async (req, res) => {
 // @access  Public
 exports.searchBlogs = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const { q, page = 1, limit = 12 } = req.query;
 
     if (!q || q.trim().length === 0) {
@@ -435,9 +422,6 @@ exports.searchBlogs = async (req, res) => {
 // @access  Private (Admin)
 exports.getAdminBlogs = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const { page = 1, limit = 20, status, search, featured, tag } = req.query;
 
     console.log("🔍 Admin blog query params:", req.query);
@@ -575,11 +559,6 @@ exports.createBlog = async (req, res) => {
   console.log("🚨 Request body:", JSON.stringify(req.body, null, 2));
 
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) {
-      console.log("❌ Validation failed:", validationError);
-      return validationError;
-    }
 
     const {
       title,
@@ -603,8 +582,12 @@ exports.createBlog = async (req, res) => {
       authorName = author;
     }
 
-    // FIXED: Handle image from either featuredImage object or direct image field
-    const imageUrl = featuredImage?.url || image || null;
+    // FIXED: Handle image as JSON object to match database JSONB type
+    const imageData = featuredImage?.url ? {
+      url: featuredImage.url,
+      alt: featuredImage.alt || '',
+      publicId: featuredImage.publicId || ''
+    } : (image ? { url: image, alt: '', publicId: '' } : null);
 
     console.log("🔄 Processing blog data:", {
       title,
@@ -613,7 +596,7 @@ exports.createBlog = async (req, res) => {
       featured,
       tags,
       category,
-      hasImage: !!imageUrl,
+      hasImage: !!imageData,
     });
 
     // Validate required fields
@@ -624,9 +607,8 @@ exports.createBlog = async (req, res) => {
       });
     }
 
-    // Get admin user ID - make it optional for now
-    const userId =
-      req.admin?.id || req.user?.id || "00000000-0000-0000-0000-000000000000";
+    // Get admin user ID - set to null if no admin is authenticated
+    const userId = req.admin?.id || req.user?.id || null;
 
     // FIXED: Generate slug from title if not provided
     const finalSlug =
@@ -643,7 +625,7 @@ exports.createBlog = async (req, res) => {
       content: content.trim(),
       excerpt: excerpt?.trim() || content.substring(0, 200) + "...",
       slug: finalSlug,
-      image: imageUrl,
+      image: imageData,
       status,
       featured: Boolean(featured),
       tags: Array.isArray(tags) ? tags.filter((tag) => tag && tag.trim()) : [],
@@ -655,8 +637,23 @@ exports.createBlog = async (req, res) => {
     };
 
     console.log("🔄 Final blog data to create:", blogData);
+    console.log("🔄 Blog data types:", {
+      title: typeof blogData.title,
+      content: typeof blogData.content,
+      excerpt: typeof blogData.excerpt,
+      slug: typeof blogData.slug,
+      image: typeof blogData.image,
+      status: typeof blogData.status,
+      featured: typeof blogData.featured,
+      tags: Array.isArray(blogData.tags) ? `Array[${blogData.tags.length}]` : typeof blogData.tags,
+      author: typeof blogData.author,
+      category: typeof blogData.category,
+      userId: typeof blogData.userId,
+    });
 
+    console.log("🚀 About to call Blog.create...");
     const blog = await Blog.create(blogData);
+    console.log("✅ Blog.create completed successfully");
 
     if (!blog) {
       console.error("❌ Blog.create returned null/undefined");
@@ -694,10 +691,8 @@ exports.createBlog = async (req, res) => {
     res.status(500).json({
       success: false,
       error: "Failed to create blog",
-      message:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Something went wrong",
+      message: error.message, // Always show the actual error for debugging
+      stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
     });
   }
 };
@@ -707,9 +702,6 @@ exports.createBlog = async (req, res) => {
 // @access  Private (Admin)
 exports.updateBlog = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const { id } = req.params;
     const updateData = { ...req.body };
 
@@ -853,9 +845,6 @@ exports.toggleFeatured = async (req, res) => {
 // @access  Private (Admin)
 exports.updateBlogStatus = async (req, res) => {
   try {
-    const validationError = handleValidationErrors(req, res);
-    if (validationError) return validationError;
-
     const { id } = req.params;
     const { status } = req.body;
 

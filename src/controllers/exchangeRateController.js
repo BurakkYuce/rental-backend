@@ -1,66 +1,135 @@
 // src/controllers/exchangeRateController.js - Exchange Rate Management Controller
 const ExchangeRate = require("../models/ExchangeRate");
 const { validationResult } = require("express-validator");
+const https = require("https");
 
 /**
- * @desc Get current active exchange rates
+ * Fetch real-time exchange rates from Turkey's Central Bank (TCMB)
+ * @returns {Promise<Object>} Exchange rates with EUR as base currency
+ */
+const fetchTCMBRates = async () => {
+  return new Promise((resolve, reject) => {
+    const url = 'https://www.tcmb.gov.tr/kurlar/today.xml';
+    
+    console.log('🔄 Fetching exchange rates from TCMB...');
+    
+    https.get(url, (response) => {
+      let data = '';
+      
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      response.on('end', () => {
+        try {
+          // Parse XML to extract USD and EUR rates
+          const usdMatch = data.match(/<Currency[^>]*CurrencyCode="USD"[^>]*>[\s\S]*?<ForexSelling>([\d.]+)<\/ForexSelling>/);
+          const eurMatch = data.match(/<Currency[^>]*CurrencyCode="EUR"[^>]*>[\s\S]*?<ForexSelling>([\d.]+)<\/ForexSelling>/);
+          
+          if (!usdMatch || !eurMatch) {
+            console.error('❌ Could not parse TCMB rates');
+            reject(new Error('Failed to parse exchange rates from TCMB'));
+            return;
+          }
+          
+          const usdToTry = parseFloat(usdMatch[1]);
+          const eurToTry = parseFloat(eurMatch[1]);
+          
+          // TCMB gives rates relative to TRY (1 USD = X TRY, 1 EUR = Y TRY)
+          // If 1 EUR = 47 TRY and 1 USD = 43 TRY, then 1 EUR = 47/43 USD = 1.09 USD
+          const eurToUsd = eurToTry / usdToTry; // How many USD for 1 EUR
+          
+          const rates = {
+            EUR: 1, // Base currency
+            TRY: eurToTry, // 1 EUR = X TRY
+            USD: eurToUsd  // 1 EUR = X USD
+          };
+          
+          console.log('✅ TCMB rates fetched successfully:', rates);
+          resolve(rates);
+          
+        } catch (error) {
+          console.error('❌ Error parsing TCMB data:', error);
+          reject(error);
+        }
+      });
+      
+    }).on('error', (error) => {
+      console.error('❌ Error fetching TCMB rates:', error);
+      reject(error);
+    });
+  });
+};
+
+/**
+ * @desc Get current active exchange rates from TCMB (real-time)
  * @route GET /api/exchange-rates/current
  * @access Public
  */
 const getCurrentRates = async (req, res) => {
   try {
-    const currentRates = await ExchangeRate.getCurrentRates();
+    // Fetch real-time rates from TCMB
+    const rates = await fetchTCMBRates();
     
-    if (!currentRates) {
-      // Create default rates if none exist
-      const defaultRates = new ExchangeRate({
-        rates: {
-          EUR: 1,
-          TRY: 35.4,
-          USD: 1.09,
-        },
-        lastUpdatedBy: null,
-        updateNotes: "Default exchange rates",
-        isActive: true,
-      });
-      
-      await defaultRates.save();
-      
-      return res.status(200).json({
-        success: true,
-        message: "Default exchange rates created",
-        data: {
-          rates: defaultRates.rates,
-          lastUpdated: defaultRates.createdAt,
-          formattedRates: defaultRates.formattedRates,
-          supportedCurrencies: defaultRates.supportedCurrencies,
-        },
-      });
-    }
+    // Format rates for display
+    const formattedRates = {
+      EUR: `€1.00`,
+      TRY: `₺${rates.TRY.toFixed(2)}`,
+      USD: `$${rates.USD.toFixed(2)}`
+    };
+    
+    const supportedCurrencies = [
+      { code: "EUR", name: "Euro", symbol: "€" },
+      { code: "TRY", name: "Turkish Lira", symbol: "₺" },
+      { code: "USD", name: "US Dollar", symbol: "$" }
+    ];
     
     res.status(200).json({
       success: true,
-      message: "Current exchange rates retrieved successfully",
+      message: "Real-time exchange rates from TCMB",
       data: {
-        rates: currentRates.rates,
-        lastUpdated: currentRates.createdAt,
-        lastUpdatedBy: currentRates.lastUpdatedBy,
-        updateNotes: currentRates.updateNotes,
-        formattedRates: currentRates.formattedRates,
-        supportedCurrencies: currentRates.supportedCurrencies,
+        rates,
+        lastUpdated: new Date(),
+        source: "Turkey Central Bank (TCMB)",
+        formattedRates,
+        supportedCurrencies,
       },
     });
   } catch (error) {
-    console.error("Error getting current exchange rates:", error);
-    res.status(500).json({
-      success: false,
-      error: "Failed to retrieve exchange rates",
+    console.error("Error getting TCMB exchange rates:", error);
+    
+    // Fallback to default rates if TCMB fails
+    // Realistic rates: 1 EUR = 37 TRY, 1 USD = 34 TRY, so 1 EUR = 1.09 USD
+    const fallbackRates = {
+      EUR: 1,      // Base currency
+      TRY: 37.0,   // 1 EUR = 37 TRY
+      USD: 1.09,   // 1 EUR = 1.09 USD
+    };
+    
+    res.status(200).json({
+      success: true,
+      message: "Using fallback exchange rates (TCMB unavailable)",
+      data: {
+        rates: fallbackRates,
+        lastUpdated: new Date(),
+        source: "Fallback rates",
+        formattedRates: {
+          EUR: `€1.00`,
+          TRY: `₺${fallbackRates.TRY.toFixed(2)}`,
+          USD: `$${fallbackRates.USD.toFixed(2)}`
+        },
+        supportedCurrencies: [
+          { code: "EUR", name: "Euro", symbol: "€" },
+          { code: "TRY", name: "Turkish Lira", symbol: "₺" },
+          { code: "USD", name: "US Dollar", symbol: "$" }
+        ],
+      },
     });
   }
 };
 
 /**
- * @desc Convert currency amount
+ * @desc Convert currency amount using TCMB real-time rates
  * @route POST /api/exchange-rates/convert
  * @access Public
  */
@@ -83,36 +152,61 @@ const convertCurrency = async (req, res) => {
       });
     }
     
-    const currentRates = await ExchangeRate.getCurrentRates();
-    if (!currentRates) {
-      return res.status(404).json({
+    // Validate supported currencies
+    const supportedCurrencies = ['EUR', 'TRY', 'USD'];
+    if (!supportedCurrencies.includes(fromCurrency) || !supportedCurrencies.includes(toCurrency)) {
+      return res.status(400).json({
         success: false,
-        error: "Exchange rates not configured",
+        error: `Supported currencies: ${supportedCurrencies.join(', ')}`,
       });
     }
     
+    let rates;
     try {
-      const convertedAmount = currentRates.convertCurrency(amount, fromCurrency, toCurrency);
-      const formattedAmount = currentRates.formatPrice(convertedAmount, toCurrency);
-      
-      res.status(200).json({
-        success: true,
-        message: "Currency conversion successful",
-        data: {
-          originalAmount: amount,
-          fromCurrency,
-          toCurrency,
-          convertedAmount,
-          formattedAmount,
-          exchangeRate: currentRates.rates[toCurrency] / currentRates.rates[fromCurrency],
-        },
-      });
-    } catch (conversionError) {
-      res.status(400).json({
-        success: false,
-        error: conversionError.message,
-      });
+      // Fetch real-time rates from TCMB
+      rates = await fetchTCMBRates();
+    } catch (error) {
+      // Use fallback rates if TCMB fails
+      rates = {
+        EUR: 1,      // Base currency
+        TRY: 37.0,   // 1 EUR = 37 TRY
+        USD: 1.09,   // 1 EUR = 1.09 USD
+      };
     }
+    
+    // Convert currency (all rates are relative to EUR as base)
+    let convertedAmount;
+    if (fromCurrency === toCurrency) {
+      convertedAmount = amount;
+    } else {
+      // Convert from source currency to EUR, then to target currency
+      const amountInEUR = amount / rates[fromCurrency];
+      convertedAmount = amountInEUR * rates[toCurrency];
+    }
+    
+    // Format amount with currency symbol
+    const currencySymbols = {
+      EUR: '€',
+      TRY: '₺',
+      USD: '$'
+    };
+    
+    const formattedAmount = `${currencySymbols[toCurrency]}${convertedAmount.toFixed(2)}`;
+    const exchangeRate = rates[toCurrency] / rates[fromCurrency];
+    
+    res.status(200).json({
+      success: true,
+      message: "Currency conversion successful using TCMB rates",
+      data: {
+        originalAmount: amount,
+        fromCurrency,
+        toCurrency,
+        convertedAmount: Math.round(convertedAmount * 100) / 100,
+        formattedAmount,
+        exchangeRate: Math.round(exchangeRate * 10000) / 10000,
+        source: "Turkey Central Bank (TCMB)",
+      },
+    });
   } catch (error) {
     console.error("Error converting currency:", error);
     res.status(500).json({
@@ -230,26 +324,39 @@ const updateExchangeRates = async (req, res) => {
 };
 
 /**
- * @desc Get supported currencies
+ * @desc Get supported currencies with TCMB real-time rates
  * @route GET /api/exchange-rates/currencies
  * @access Public
  */
 const getSupportedCurrencies = async (req, res) => {
   try {
-    const currentRates = await ExchangeRate.getCurrentRates();
+    let currentRates;
+    try {
+      // Fetch real-time rates from TCMB
+      currentRates = await fetchTCMBRates();
+    } catch (error) {
+      // Use fallback rates if TCMB fails
+      currentRates = {
+        EUR: 1,      // Base currency
+        TRY: 37.0,   // 1 EUR = 37 TRY
+        USD: 1.09,   // 1 EUR = 1.09 USD
+      };
+    }
     
     const currencies = [
-      { code: "EUR", name: "Euro", symbol: "€", default: true },
-      { code: "TRY", name: "Turkish Lira", symbol: "₺", default: false },
-      { code: "USD", name: "US Dollar", symbol: "$", default: false },
+      { code: "EUR", name: "Euro", symbol: "€", default: true, rate: currentRates.EUR },
+      { code: "TRY", name: "Turkish Lira", symbol: "₺", default: false, rate: currentRates.TRY },
+      { code: "USD", name: "US Dollar", symbol: "$", default: false, rate: currentRates.USD },
     ];
     
     res.status(200).json({
       success: true,
-      message: "Supported currencies retrieved successfully",
+      message: "Supported currencies with TCMB rates",
       data: {
         currencies,
-        currentRates: currentRates ? currentRates.rates : null,
+        currentRates,
+        source: "Turkey Central Bank (TCMB)",
+        lastUpdated: new Date(),
       },
     });
   } catch (error) {

@@ -25,14 +25,39 @@ const {
 
 // ✅ YENİ: Frontend ile uyumlu rotalar
 router.post(
-  "/images/upload",
-  uploadConfigs.single("image"),
+  "/upload",
+  (req, res, next) => {
+    console.log("📤 Pre-upload middleware - incoming request");
+    uploadConfigs.single("image")(req, res, (err) => {
+      if (err) {
+        console.error("❌ Multer error:", err.message);
+        console.error("❌ Error type:", err.constructor.name);
+        return res.status(400).json({
+          error: "File upload error",
+          message: err.message,
+          errorType: err.constructor.name
+        });
+      }
+      next();
+    });
+  },
   async (req, res) => {
     try {
+      console.log("📤 Image upload request received:");
+      console.log("- File:", req.file ? "✅ Present" : "❌ Missing");
+      console.log("- Body:", req.body);
+      console.log("- Headers:", req.headers['content-type']);
+      
       if (!req.file) {
+        console.log("❌ No file found in request");
         return res.status(400).json({
           error: "No file uploaded",
           message: "Please select an image file to upload",
+          debug: {
+            hasFile: !!req.file,
+            bodyKeys: Object.keys(req.body),
+            contentType: req.headers['content-type']
+          }
         });
       }
 
@@ -84,10 +109,13 @@ router.post(
       });
     } catch (error) {
       console.error("❌ Single image upload error:", error);
+      console.error("❌ Error stack:", error.stack);
       res.status(500).json({
         error: "Upload failed",
         message: "Failed to upload image",
-        details: error.message, // 🔧 Hata detayları eklendi
+        details: error.message,
+        errorType: error.constructor.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       });
     }
   }
@@ -95,7 +123,7 @@ router.post(
 
 // ✅ Çoklu resim yükleme - frontend uyumlu
 router.post(
-  "/images/upload-multiple",
+  "/upload-multiple",
   uploadConfigs.multiple("images"),
   async (req, res) => {
     try {
@@ -154,7 +182,7 @@ router.post(
 );
 
 // ✅ Resim silme - frontend uyumlu
-router.delete("/images/delete", async (req, res) => {
+router.delete("/delete", async (req, res) => {
   try {
     const { publicId, imagePath } = req.body;
 
@@ -202,7 +230,7 @@ router.delete("/images/delete", async (req, res) => {
 // ✅ ESKI ROTALAR - Geriye dönük uyumluluk için
 router.post("/single", uploadConfigs.single("image"), async (req, res) => {
   // Aynı mantığı /images/upload ile paylaş
-  req.url = "/images/upload";
+  req.url = "/upload";
   return router.handle(req, res);
 });
 

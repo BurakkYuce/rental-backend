@@ -95,7 +95,7 @@ app.use(
 app.use("/api/listings", listingRoutes);
 app.use("/api/images", imageUploadRoutes);
 app.use("/api/cars", carRoutes);
-app.use("/api", adminAuthRoutes);
+app.use("/api/auth", adminAuthRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", blogRoutes);
 

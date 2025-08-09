@@ -212,57 +212,64 @@ router.get("/cars/:id/availability", (req, res) => {
   });
 });
 
-// ===== EXCHANGE RATES =====
+// ===== EXCHANGE RATES (Real TCMB Integration) =====
+
+const { 
+  getCurrentRates, 
+  convertCurrency, 
+  getSupportedCurrencies 
+} = require("../controllers/exchangeRateController");
 
 /**
  * @swagger
  * /api/exchange-rates/current:
  *   get:
- *     summary: Get current exchange rates (mock data)
- *     tags: [Compatibility]
+ *     summary: Get real-time exchange rates from TCMB
+ *     tags: [Exchange Rates]
  *     responses:
  *       200:
- *         description: Mock exchange rates
+ *         description: Real-time exchange rates from Turkey Central Bank
  */
-router.get("/exchange-rates/current", (req, res) => {
-  res.json({
-    success: true,
-    data: {
-      TRY: 1,
-      EUR: 0.03,
-      USD: 0.035,
-      lastUpdated: new Date().toISOString(),
-    },
-  });
-});
+router.get("/exchange-rates/current", getCurrentRates);
 
-router.get("/exchange-rates/currencies", (req, res) => {
-  res.json({
-    success: true,
-    data: ["TRY", "EUR", "USD"],
-  });
-});
+/**
+ * @swagger
+ * /api/exchange-rates/currencies:
+ *   get:
+ *     summary: Get supported currencies with real rates
+ *     tags: [Exchange Rates]
+ *     responses:
+ *       200:
+ *         description: Supported currencies with current rates
+ */
+router.get("/exchange-rates/currencies", getSupportedCurrencies);
 
-router.post("/exchange-rates/convert", (req, res) => {
-  const { amount = 0, fromCurrency = "TRY", toCurrency = "TRY" } = req.body;
-  const mockRates = { TRY: 1, EUR: 0.03, USD: 0.035 };
-
-  const convertedAmount =
-    fromCurrency === toCurrency
-      ? amount
-      : (amount / mockRates[fromCurrency]) * mockRates[toCurrency];
-
-  res.json({
-    success: true,
-    data: {
-      originalAmount: amount,
-      convertedAmount: Math.round(convertedAmount * 100) / 100,
-      fromCurrency,
-      toCurrency,
-      rate: mockRates[toCurrency] / mockRates[fromCurrency],
-    },
-  });
-});
+/**
+ * @swagger
+ * /api/exchange-rates/convert:
+ *   post:
+ *     summary: Convert currency using real TCMB rates
+ *     tags: [Exchange Rates]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               amount:
+ *                 type: number
+ *               fromCurrency:
+ *                 type: string
+ *                 enum: [EUR, TRY, USD]
+ *               toCurrency:
+ *                 type: string
+ *                 enum: [EUR, TRY, USD]
+ *     responses:
+ *       200:
+ *         description: Currency converted using TCMB rates
+ */
+router.post("/exchange-rates/convert", convertCurrency);
 
 // ===== DISABLED/REMOVED ADMIN BLOG ROUTES =====
 // These routes have been removed to prevent conflicts with actual admin blog routes

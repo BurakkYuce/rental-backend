@@ -41,7 +41,7 @@ module.exports = (sequelize) => {
         },
       },
       image: {
-        type: DataTypes.TEXT,
+        type: DataTypes.JSONB, // Match the actual database column type
         allowNull: true,
       },
       status: {

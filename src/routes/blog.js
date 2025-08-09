@@ -140,13 +140,17 @@ router.get(
       .withMessage("Limit must be between 1 and 100"),
     query("status")
       .optional()
-      .isIn(["draft", "published", "archived"])
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return ["draft", "published", "archived"].includes(value);
+      })
       .withMessage("Status must be draft, published, or archived"),
     query("search")
       .optional()
-      .isString()
-      .trim()
-      .isLength({ min: 1, max: 200 })
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return typeof value === 'string' && value.trim().length >= 1 && value.trim().length <= 200;
+      })
       .withMessage("Search query must be between 1 and 200 characters"),
     query("featured")
       .optional()
@@ -154,9 +158,10 @@ router.get(
       .withMessage("Featured must be a boolean"),
     query("tag")
       .optional()
-      .isString()
-      .trim()
-      .isLength({ min: 1, max: 50 })
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return typeof value === 'string' && value.trim().length >= 1 && value.trim().length <= 50;
+      })
       .withMessage("Tag must be a valid string"),
   ],
   handleValidationErrors,

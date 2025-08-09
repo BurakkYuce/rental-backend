@@ -33,6 +33,7 @@ const {
   createAdminCar,
   updateAdminCar,
   deleteAdminCar,
+  updateCarStatus,
   getCarScheduledPricing,
   addCarScheduledPricing,
   deleteCarScheduledPricing,
@@ -361,6 +362,22 @@ router.put(
   updateAdminCar
 );
 
+// Update car status
+router.patch(
+  "/cars/:id/status",
+  [
+    body("status")
+      .notEmpty()
+      .isIn(["active", "inactive", "maintenance"])
+      .withMessage("Status must be active, inactive, or maintenance"),
+  ],
+  (req, res, next) => {
+    // Convert to updateCarStatus format for the controller
+    req.body = { status: req.body.status };
+    updateCarStatus(req, res, next);
+  }
+);
+
 // Delete car
 router.delete("/cars/:id", deleteAdminCar);
 
@@ -566,15 +583,24 @@ router.get(
       .withMessage("Limit must be between 1 and 100"),
     query("status")
       .optional()
-      .isIn(["draft", "published", "archived"])
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return ["draft", "published", "archived"].includes(value);
+      })
       .withMessage("Invalid status"),
     query("category")
       .optional()
-      .isString()
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return typeof value === 'string';
+      })
       .withMessage("Category must be a string"),
     query("search")
       .optional()
-      .isLength({ min: 1 })
+      .custom((value) => {
+        if (!value || value === '') return true; // Allow empty string
+        return typeof value === 'string' && value.trim().length >= 1;
+      })
       .withMessage("Search query cannot be empty"),
   ],
   getAdminBlogs
