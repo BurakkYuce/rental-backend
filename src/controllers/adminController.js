@@ -1977,4 +1977,40 @@ module.exports = {
   getDbStats,
   getAllCars,
   getAllTables,
+  
+  // Dashboard stats API
+  getDashboardStats,
 };
+
+// Dashboard statistics function
+async function getDashboardStats(req, res) {
+  try {
+    console.log('📊 Loading dashboard statistics...');
+    
+    // Simple mock stats for now to get dashboard working
+    const stats = {
+      totalCars: 1,
+      activeCars: 1,
+      totalBookings: 0,
+      completedBookings: 0,
+      totalRevenue: "0.00",
+      totalBlogs: 0,
+      recentBookings: []
+    };
+    
+    console.log('✅ Dashboard stats loaded:', stats);
+    
+    res.json({
+      success: true,
+      data: stats
+    });
+    
+  } catch (error) {
+    console.error('❌ Dashboard stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to load dashboard statistics',
+      message: error.message
+    });
+  }
+}

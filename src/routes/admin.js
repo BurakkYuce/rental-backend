@@ -18,7 +18,7 @@ const {
 
 
 const {
-  getAdminDashboardStats,
+  getDashboardStats,
   getDbStats,
   getAllCars,
   // getAllCollections, // Function doesn't exist
@@ -66,6 +66,13 @@ const {
   initializeDefaultRates,
 } = require("../controllers/exchangeRateController");
 
+const {
+  createTransfer,
+  updateTransfer,
+  deleteTransfer,
+  getAdminTransfers
+} = require("../controllers/transferController");
+
 /**
  * @swagger
  * tags:
@@ -79,7 +86,7 @@ router.use(protect);
 // ===== DASHBOARD ROUTES =====
 
 // Get admin dashboard statistics
-router.get("/dashboard/stats", getAdminDashboardStats);
+router.get("/dashboard/stats", getDashboardStats);
 
 // Get recent bookings for admin dashboard
 router.get(
@@ -128,7 +135,7 @@ router.post(
   [
     body("carId")
       .notEmpty()
-      .isMongoId()
+      .isUUID(4)
       .withMessage("Valid car ID is required"),
     body("drivers")
       .isArray({ min: 1 })
@@ -774,5 +781,81 @@ router.post("/exchange-rates/initialize", initializeDefaultRates);
 
 // Get all locations
 router.get("/locations", getLocations);
+
+// ===== TRANSFER ZONES MANAGEMENT ROUTES =====
+
+// Get all transfer zones for admin (includes inactive)
+router.get("/transfers", getAdminTransfers);
+
+// Create new transfer zone
+router.post(
+  "/transfers",
+  [
+    body("zoneName")
+      .notEmpty()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Zone name must be between 2 and 100 characters"),
+    body("description")
+      .optional()
+      .isLength({ max: 1000 })
+      .withMessage("Description must be less than 1000 characters"),
+    body("pricing.capacity_1_4")
+      .notEmpty()
+      .isFloat({ min: 0 })
+      .withMessage("1-4 passenger capacity pricing is required and must be a positive number"),
+    body("pricing.capacity_1_6")
+      .notEmpty()
+      .isFloat({ min: 0 })
+      .withMessage("1-6 passenger capacity pricing is required and must be a positive number"),
+    body("pricing.capacity_1_16")
+      .notEmpty()
+      .isFloat({ min: 0 })
+      .withMessage("1-16 passenger capacity pricing is required and must be a positive number"),
+    body("displayOrder")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Display order must be a non-negative integer"),
+  ],
+  createTransfer
+);
+
+// Update existing transfer zone
+router.put(
+  "/transfers/:id",
+  [
+    body("zoneName")
+      .optional()
+      .isLength({ min: 2, max: 100 })
+      .withMessage("Zone name must be between 2 and 100 characters"),
+    body("description")
+      .optional()
+      .isLength({ max: 1000 })
+      .withMessage("Description must be less than 1000 characters"),
+    body("pricing.capacity_1_4")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("1-4 passenger capacity pricing must be a positive number"),
+    body("pricing.capacity_1_6")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("1-6 passenger capacity pricing must be a positive number"),
+    body("pricing.capacity_1_16")
+      .optional()
+      .isFloat({ min: 0 })
+      .withMessage("1-16 passenger capacity pricing must be a positive number"),
+    body("displayOrder")
+      .optional()
+      .isInt({ min: 0 })
+      .withMessage("Display order must be a non-negative integer"),
+    body("status")
+      .optional()
+      .isIn(["active", "inactive"])
+      .withMessage("Status must be active or inactive"),
+  ],
+  updateTransfer
+);
+
+// Delete transfer zone
+router.delete("/transfers/:id", deleteTransfer);
 
 module.exports = router;

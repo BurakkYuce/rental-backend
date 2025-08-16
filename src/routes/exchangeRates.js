@@ -20,92 +20,9 @@ const router = express.Router();
  *   description: Exchange rate management endpoints
  */
 
-/**
- * @swagger
- * /api/exchange-rates/current:
- *   get:
- *     summary: Get current active exchange rates
- *     tags: [Exchange Rates]
- *     responses:
- *       200:
- *         description: Current exchange rates retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                 message:
- *                   type: string
- *                 data:
- *                   type: object
- *                   properties:
- *                     rates:
- *                       type: object
- *                       properties:
- *                         EUR:
- *                           type: number
- *                         TRY:
- *                           type: number
- *                         USD:
- *                           type: number
- *                     lastUpdated:
- *                       type: string
- *                       format: date-time
- *                     formattedRates:
- *                       type: object
- *                     supportedCurrencies:
- *                       type: array
- *                       items:
- *                         type: string
- */
 router.get("/current", getCurrentRates);
-
-/**
- * @swagger
- * /api/exchange-rates/currencies:
- *   get:
- *     summary: Get supported currencies
- *     tags: [Exchange Rates]
- *     responses:
- *       200:
- *         description: Supported currencies retrieved successfully
- */
 router.get("/currencies", getSupportedCurrencies);
 
-/**
- * @swagger
- * /api/exchange-rates/convert:
- *   post:
- *     summary: Convert currency amount
- *     tags: [Exchange Rates]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - amount
- *               - fromCurrency
- *               - toCurrency
- *             properties:
- *               amount:
- *                 type: number
- *                 minimum: 0.01
- *               fromCurrency:
- *                 type: string
- *                 enum: [EUR, TRY, USD]
- *               toCurrency:
- *                 type: string
- *                 enum: [EUR, TRY, USD]
- *     responses:
- *       200:
- *         description: Currency conversion successful
- *       400:
- *         description: Invalid input parameters
- */
 router.post("/convert", [
   body("amount")
     .isNumeric()
@@ -120,38 +37,9 @@ router.post("/convert", [
     .withMessage("Invalid target currency"),
 ], convertCurrency);
 
-// Protected routes (Admin only)
 router.use(protect);
 router.use(restrictTo("admin", "super_admin"));
 
-/**
- * @swagger
- * /api/exchange-rates/history:
- *   get:
- *     summary: Get exchange rate update history
- *     tags: [Exchange Rates]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: page
- *         schema:
- *           type: integer
- *           minimum: 1
- *         description: Page number
- *       - in: query
- *         name: limit
- *         schema:
- *           type: integer
- *           minimum: 1
- *           maximum: 50
- *         description: Number of items per page
- *     responses:
- *       200:
- *         description: Exchange rate history retrieved successfully
- *       401:
- *         description: Unauthorized
- */
 router.get("/history", [
   query("page")
     .optional()
@@ -163,46 +51,6 @@ router.get("/history", [
     .withMessage("Limit must be between 1 and 50"),
 ], getRateHistory);
 
-/**
- * @swagger
- * /api/exchange-rates:
- *   put:
- *     summary: Update exchange rates
- *     tags: [Exchange Rates]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - rates
- *             properties:
- *               rates:
- *                 type: object
- *                 required:
- *                   - TRY
- *                   - USD
- *                 properties:
- *                   TRY:
- *                     type: number
- *                     minimum: 0.01
- *                   USD:
- *                     type: number
- *                     minimum: 0.01
- *               updateNotes:
- *                 type: string
- *                 maxLength: 500
- *     responses:
- *       200:
- *         description: Exchange rates updated successfully
- *       400:
- *         description: Validation failed
- *       401:
- *         description: Unauthorized
- */
 router.put("/", [
   body("rates.TRY")
     .isFloat({ min: 0.01 })

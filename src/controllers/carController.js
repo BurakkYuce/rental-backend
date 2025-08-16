@@ -4,6 +4,54 @@ const Location = require("../models/Location");
 const { uploadImage, deleteImage } = require("../utils/cloudinary");
 const { uploadImageLocally, deleteImageLocally } = require("../utils/localFileUpload");
 
+// Simple function to check if today falls within seasonal pricing
+const getEffectivePricing = (car) => {
+  // Ensure currency is always EUR for base pricing
+  const basePricing = {
+    ...car.pricing,
+    currency: car.pricing.currency === 'TRY' ? 'EUR' : car.pricing.currency
+  };
+  
+  if (!car.seasonalPricing || car.seasonalPricing.length === 0) {
+    return basePricing;
+  }
+  
+  const today = new Date();
+  
+  for (const season of car.seasonalPricing) {
+    if (!season.startDate || !season.endDate) continue;
+    
+    // Parse Turkish date format DD/MM/YYYY
+    const [startDay, startMonth, startYear] = season.startDate.split('/');
+    const [endDay, endMonth, endYear] = season.endDate.split('/');
+    
+    const startDate = new Date(startYear, startMonth - 1, startDay);
+    const endDate = new Date(endYear, endMonth - 1, endDay);
+    
+    console.log(`📅 Checking seasonal pricing "${season.name}":`, {
+      today: today.toDateString(),
+      startDate: startDate.toDateString(), 
+      endDate: endDate.toDateString(),
+      isInRange: today >= startDate && today <= endDate
+    });
+    
+    if (today >= startDate && today <= endDate) {
+      console.log(`🎯 Using seasonal pricing: ${season.name}`);
+      return {
+        daily: parseFloat(season.daily) || basePricing.daily,
+        weekly: parseFloat(season.weekly) || basePricing.weekly,
+        monthly: parseFloat(season.monthly) || basePricing.monthly,
+        currency: basePricing.currency, // Use EUR currency
+        seasonalName: season.name,
+        seasonalPeriod: `${season.startDate} - ${season.endDate}`
+      };
+    }
+  }
+  
+  console.log('📅 Using base pricing');
+  return basePricing;
+};
+
 // @desc    Get all cars with filters
 // @route   GET /api/cars
 // @access  Public
@@ -38,9 +86,21 @@ exports.getAllCars = async (req, res) => {
 
     const totalPages = Math.ceil(count / limit);
 
+    // Apply seasonal pricing to each car
+    const carsWithSeasonalPricing = cars.map(car => {
+      const carData = car.toJSON();
+      const effectivePricing = getEffectivePricing(carData);
+      
+      return {
+        ...carData,
+        effectivePricing,
+        basePricing: carData.pricing
+      };
+    });
+
     res.json({
       success: true,
-      data: cars,
+      data: carsWithSeasonalPricing,
       pagination: {
         page,
         limit,
@@ -685,9 +745,19 @@ exports.getCar = async (req, res) => {
       });
     }
 
+    // Apply seasonal pricing
+    const carData = car.toJSON();
+    const effectivePricing = getEffectivePricing(carData);
+    
+    const finalCarData = {
+      ...carData,
+      effectivePricing,
+      basePricing: carData.pricing
+    };
+
     res.json({
       success: true,
-      data: car,
+      data: finalCarData,
     });
   } catch (error) {
     res.status(500).json({
@@ -1363,13 +1433,20 @@ const getAdminCars = async (req, res) => {
     // Transform cars for admin interface
     const transformedCars = cars.map((car) => ({
       id: car.id, // Sequelize uses 'id' not '_id'
+      title: car.title, // Keep original title for booking form
       name: car.title,
       type: car.category || "SUV", 
       status: car.status === "active" ? "Available" : "Unavailable", // Map ENUM to display text
+      pricing: {
+        daily: car.pricing?.daily || 0,
+        weekly: car.pricing?.weekly || 0,
+        monthly: car.pricing?.monthly || 0,
+        currency: car.pricing?.currency || 'EUR'
+      },
       basePrice: {
-        USD: car.pricing?.daily?.toString() || "",
-        EUR: car.pricing?.daily?.toString() || "", // Simplified for now
-        TRY: car.pricing?.daily?.toString() || "",
+        USD: car.pricing?.daily?.toString() || "0",
+        EUR: car.pricing?.daily?.toString() || "0",
+        TRY: car.pricing?.daily?.toString() || "0",
       },
       image: car.mainImage?.url || "/placeholder-car.jpg",
       seats: car.seats || 5,
@@ -1502,6 +1579,7 @@ const getAdminCarDetails = async (req, res) => {
       },
       mainImage: car.mainImage || null, // FIXED: direct field like public API
       gallery: car.gallery || [], // FIXED: direct field like public API
+      seasonalPricing: car.seasonalPricing || [], // FIXED: Add seasonal pricing
       status: car.status !== undefined ? car.status : true,
       featured: car.featured || false,
       features: car.features || [],

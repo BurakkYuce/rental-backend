@@ -17,6 +17,7 @@ const adminAuthRoutes = require("./src/routes/adminAuth");
 const adminRoutes = require("./src/routes/admin");
 const blogRoutes = require("./src/routes/blog");
 const carRoutes = require("./src/routes/cars");
+const transferRoutes = require("./src/routes/transfers");
 
 // Minimal compatibility routes for frontend
 const minimalCompatRoutes = require("./src/routes/minimal-compat");
@@ -95,6 +96,7 @@ app.use(
 app.use("/api/listings", listingRoutes);
 app.use("/api/images", imageUploadRoutes);
 app.use("/api/cars", carRoutes);
+app.use("/api/transfers", transferRoutes);
 app.use("/api/auth", adminAuthRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", blogRoutes);

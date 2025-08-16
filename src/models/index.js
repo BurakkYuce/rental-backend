@@ -4,7 +4,7 @@ const { sequelize } = require("../config/database");
 // Import models with detailed logging
 console.log("🔄 Loading models...");
 
-let Admin, Car, Blog, Listing;
+let Admin, Car, Blog, Transfer, Listing, Booking;
 
 try {
   Admin = require("./Admin");
@@ -29,10 +29,25 @@ try {
 }
 
 try {
+  const TransferFunction = require("./Transfer");
+  Transfer = TransferFunction(sequelize);
+  console.log("✅ Transfer model loaded:", typeof Transfer, Transfer.name);
+} catch (error) {
+  console.error("❌ Error loading Transfer model:", error.message);
+}
+
+try {
   Listing = require("./Listing");
   console.log("✅ Listing model loaded:", typeof Listing, Listing.name);
 } catch (error) {
   console.error("❌ Error loading Listing model:", error.message);
+}
+
+try {
+  Booking = require("./Booking");
+  console.log("✅ Booking model loaded:", typeof Booking, Booking.name);
+} catch (error) {
+  console.error("❌ Error loading Booking model:", error.message);
 }
 
 // Function to validate if a model is a valid Sequelize model
@@ -64,7 +79,9 @@ console.log("\n🔍 Validating models...");
 const adminValid = isValidSequelizeModel(Admin, "Admin");
 const carValid = isValidSequelizeModel(Car, "Car");
 const blogValid = isValidSequelizeModel(Blog, "Blog");
+const transferValid = isValidSequelizeModel(Transfer, "Transfer");
 const listingValid = isValidSequelizeModel(Listing, "Listing");
+const bookingValid = isValidSequelizeModel(Booking, "Booking");
 
 // Define relationships only if models are valid
 console.log("\n🔗 Setting up model relationships...");
@@ -78,7 +95,15 @@ console.log("✅ Admin <-> Listing relationships will be handled by associate me
 
 // Call associate methods if they exist (for your Blog.associate function)
 console.log("\n🔄 Calling associate methods...");
-const models = { Admin, Car, Blog, Listing };
+const models = { Admin, Car, Blog, Transfer, Listing, Booking };
+
+// Set up Car-Booking association (disabled for now to fix column name issues)
+// if (Car && Booking) {
+//   Car.hasMany(Booking, { foreignKey: 'carId', as: 'bookings', sourceKey: 'id' });
+//   Booking.belongsTo(Car, { foreignKey: 'carId', as: 'car', targetKey: 'id' });
+//   console.log("✅ Car <-> Booking associations set up");
+// }
+console.log("⚠️ Car <-> Booking associations temporarily disabled");
 
 Object.keys(models).forEach((modelName) => {
   const model = models[modelName];
@@ -102,7 +127,9 @@ const exportedModels = {
 if (Admin) exportedModels.Admin = Admin;
 if (Car) exportedModels.Car = Car;
 if (Blog) exportedModels.Blog = Blog;
+if (Transfer) exportedModels.Transfer = Transfer;
 if (Listing) exportedModels.Listing = Listing;
+if (Booking) exportedModels.Booking = Booking;
 
 console.log("\n📦 Final exported models:", Object.keys(exportedModels));
 console.log("🎉 Model setup completed!\n");

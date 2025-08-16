@@ -2,6 +2,7 @@
 const { validationResult } = require("express-validator");
 const Booking = require("../models/Booking");
 const Car = require("../models/cars");
+const { Transfer } = require("../models");
 
 /**
  * Get all bookings with filters (Admin only)
@@ -55,13 +56,7 @@ const getBookingById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const booking = await Booking.findById(id)
-      .populate(
-        "car",
-        "brand model year type dailyRate images currentPrice pricing"
-      )
-      .populate("createdBy", "username email")
-      .populate("lastModifiedBy", "username email");
+    const booking = await Booking.findByPk(id);
 
     if (!booking) {
       return res.status(404).json({
@@ -100,7 +95,10 @@ const createBooking = async (req, res) => {
     }
 
     const {
+      serviceType = 'car_rental',
       carId,
+      transferId,
+      transferData,
       drivers,
       pickupLocation,
       dropoffLocation,
@@ -109,28 +107,57 @@ const createBooking = async (req, res) => {
       specialRequests,
       adminNotes,
       additionalServices = [],
+      pricing
     } = req.body;
 
-    // Verify car exists and get pricing
-    const car = await Car.findById(carId);
-    if (!car) {
-      return res.status(404).json({
+    // Validate service type
+    if (!['car_rental', 'transfer'].includes(serviceType)) {
+      return res.status(400).json({
         success: false,
-        error: "Selected car not found",
+        error: "Invalid service type. Must be 'car_rental' or 'transfer'",
       });
+    }
+
+    // Validate based on service type
+    if (serviceType === 'car_rental' && !carId) {
+      return res.status(400).json({
+        success: false,
+        error: "Car ID is required for car rental bookings",
+      });
+    }
+
+    if (serviceType === 'transfer' && !transferId) {
+      // Transfer bookings can work without transferId for custom locations
+      console.log('Transfer booking without specific zone');
+    }
+
+    // Verify car exists if car rental
+    let car = null;
+    if (serviceType === 'car_rental') {
+      car = await Car.findByPk(carId);
+      if (!car) {
+        return res.status(404).json({
+          success: false,
+          error: "Selected car not found",
+        });
+      }
+    }
+
+    // Verify transfer zone exists if transfer
+    let transfer = null;
+    if (serviceType === 'transfer' && transferId) {
+      transfer = await Transfer.findByPk(transferId);
+      if (!transfer) {
+        return res.status(404).json({
+          success: false,
+          error: "Selected transfer zone not found",
+        });
+      }
     }
 
     // Validate dates
     const pickup = new Date(pickupTime);
     const dropoff = new Date(dropoffTime);
-    const now = new Date();
-
-    if (pickup <= now) {
-      return res.status(400).json({
-        success: false,
-        error: "Pickup time must be in the future",
-      });
-    }
 
     if (dropoff <= pickup) {
       return res.status(400).json({
@@ -139,55 +166,62 @@ const createBooking = async (req, res) => {
       });
     }
 
-    // Calculate duration and pricing
-    const diffTime = Math.abs(dropoff - pickup);
-    const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    const dailyRate =
-      car.pricing?.daily || car.currentPrice?.daily || car.dailyRate || 0;
+    // Calculate pricing based on service type
+    let calculatedPricing = {};
+    
+    if (serviceType === 'car_rental') {
+      // Calculate duration and pricing for car rental
+      const diffTime = Math.abs(dropoff - pickup);
+      const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      const dailyRate = car.pricing?.daily || car.currentPrice?.daily || car.dailyRate || 0;
+      
+      calculatedPricing = {
+        dailyRate,
+        totalDays,
+        subtotal: dailyRate * totalDays,
+        currency: car.pricing?.currency || 'EUR',
+        total: dailyRate * totalDays
+      };
+    } else {
+      // Use provided pricing for transfer
+      calculatedPricing = pricing || {
+        total: 0,
+        currency: 'EUR'
+      };
+    }
 
     // Create booking
     const bookingData = {
-      car: carId,
+      serviceType,
+      carId: serviceType === 'car_rental' ? carId : null,
+      transferId: serviceType === 'transfer' ? transferId : null,
+      transferData: serviceType === 'transfer' ? transferData : null,
       drivers,
       pickupLocation: pickupLocation.trim(),
       dropoffLocation: dropoffLocation.trim(),
       pickupTime: pickup,
       dropoffTime: dropoff,
-      pricing: {
-        dailyRate,
-        totalDays,
-        subtotal: dailyRate * totalDays,
-        taxes: 0, // Can be calculated based on business rules
-        totalAmount: dailyRate * totalDays,
-        currency: car.currency || "EUR",
-      },
+      pricing: calculatedPricing,
       additionalServices,
       specialRequests: specialRequests?.trim(),
       adminNotes: adminNotes?.trim(),
-      createdBy: req.admin.id || req.admin._id,
+      createdBy: req.admin?.id || null,
       status: "pending",
     };
 
-    const booking = new Booking(bookingData);
-    await booking.save();
-
-    // Populate the created booking
-    await booking.populate([
-      { path: "car", select: "brand model year type dailyRate images" },
-      { path: "createdBy", select: "username email" },
-    ]);
+    const booking = await Booking.create(bookingData);
 
     res.status(201).json({
       success: true,
       message: "Booking created successfully",
-      data: { booking },
+      data: { booking: booking },
     });
   } catch (error) {
     console.error("Error creating booking:", error);
 
-    // Handle mongoose validation errors
-    if (error.name === "ValidationError") {
-      const validationErrors = Object.values(error.errors).map((err) => ({
+    // Handle Sequelize validation errors
+    if (error.name === "SequelizeValidationError") {
+      const validationErrors = error.errors.map((err) => ({
         field: err.path,
         message: err.message,
       }));
@@ -223,7 +257,7 @@ const updateBooking = async (req, res) => {
     const { id } = req.params;
     const updateData = req.body;
 
-    const booking = await Booking.findById(id);
+    const booking = await Booking.findByPk(id);
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -242,7 +276,7 @@ const updateBooking = async (req, res) => {
 
     // If car is being changed, validate new car
     if (updateData.carId && updateData.carId !== booking.car.toString()) {
-      const newCar = await Car.findById(updateData.carId);
+      const newCar = await Car.findByPk(updateData.carId);
       if (!newCar) {
         return res.status(404).json({
           success: false,
@@ -256,7 +290,7 @@ const updateBooking = async (req, res) => {
         newCar.currentPrice?.daily ||
         newCar.dailyRate ||
         0;
-      updateData.car = updateData.carId;
+      updateData.carId = updateData.carId;
 
       if (updateData.pickupTime && updateData.dropoffTime) {
         const pickup = new Date(updateData.pickupTime);
@@ -278,14 +312,9 @@ const updateBooking = async (req, res) => {
     // Set last modified by
     updateData.lastModifiedBy = req.admin.id || req.admin._id;
 
-    const updatedBooking = await Booking.findByIdAndUpdate(id, updateData, {
-      new: true,
-      runValidators: true,
-    }).populate([
-      { path: "car", select: "brand model year type dailyRate images" },
-      { path: "createdBy", select: "username email" },
-      { path: "lastModifiedBy", select: "username email" },
-    ]);
+    await booking.update(updateData);
+
+    const updatedBooking = await Booking.findByPk(id);
 
     res.status(200).json({
       success: true,
@@ -295,8 +324,8 @@ const updateBooking = async (req, res) => {
   } catch (error) {
     console.error("Error updating booking:", error);
 
-    if (error.name === "ValidationError") {
-      const validationErrors = Object.values(error.errors).map((err) => ({
+    if (error.name === "SequelizeValidationError") {
+      const validationErrors = error.errors.map((err) => ({
         field: err.path,
         message: err.message,
       }));
@@ -323,7 +352,7 @@ const updateBookingStatus = async (req, res) => {
     const { id } = req.params;
     const { status, notes } = req.body;
 
-    const booking = await Booking.findById(id);
+    const booking = await Booking.findByPk(id);
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -347,16 +376,18 @@ const updateBookingStatus = async (req, res) => {
       });
     }
 
-    booking.status = status;
-    booking.lastModifiedBy = req.admin.id || req.admin._id;
+    const updateData = {
+      status: status,
+      lastModifiedBy: req.admin.id || req.admin._id
+    };
 
     if (notes) {
-      booking.adminNotes = booking.adminNotes
+      updateData.adminNotes = booking.adminNotes
         ? `${booking.adminNotes}\n\n[${new Date().toISOString()}] ${notes}`
         : `[${new Date().toISOString()}] ${notes}`;
     }
 
-    await booking.save();
+    await booking.update(updateData);
 
     res.status(200).json({
       success: true,
@@ -379,7 +410,7 @@ const deleteBooking = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const booking = await Booking.findById(id);
+    const booking = await Booking.findByPk(id);
     if (!booking) {
       return res.status(404).json({
         success: false,
@@ -387,15 +418,12 @@ const deleteBooking = async (req, res) => {
       });
     }
 
-    // Only allow deletion of pending or cancelled bookings
-    if (!["pending", "cancelled"].includes(booking.status)) {
-      return res.status(400).json({
-        success: false,
-        error: "Only pending or cancelled bookings can be deleted",
-      });
+    // Admin can delete any booking, but warn for active/completed bookings
+    if (["active", "completed"].includes(booking.status)) {
+      console.warn(`Admin deleting ${booking.status} booking ${booking.id}`);
     }
 
-    await Booking.findByIdAndDelete(id);
+    await booking.destroy();
 
     res.status(200).json({
       success: true,
@@ -422,19 +450,24 @@ const getBookingStatistics = async (req, res) => {
       activeBookings,
       completedBookings,
       cancelledBookings,
-      totalRevenue,
     ] = await Promise.all([
-      Booking.countDocuments(),
-      Booking.countDocuments({ status: "pending" }),
-      Booking.countDocuments({ status: "confirmed" }),
-      Booking.countDocuments({ status: "active" }),
-      Booking.countDocuments({ status: "completed" }),
-      Booking.countDocuments({ status: "cancelled" }),
-      Booking.aggregate([
-        { $match: { status: { $in: ["completed"] } } },
-        { $group: { _id: null, total: { $sum: "$pricing.totalAmount" } } },
-      ]),
+      Booking.count(),
+      Booking.count({ where: { status: "pending" } }),
+      Booking.count({ where: { status: "confirmed" } }),
+      Booking.count({ where: { status: "active" } }),
+      Booking.count({ where: { status: "completed" } }),
+      Booking.count({ where: { status: "cancelled" } }),
     ]);
+
+    // Calculate revenue from completed bookings
+    const completedBookingsWithRevenue = await Booking.findAll({
+      where: { status: 'completed' },
+      attributes: ['pricing']
+    });
+    
+    const totalRevenue = completedBookingsWithRevenue.reduce((sum, booking) => {
+      return sum + (booking.pricing?.totalAmount || 0);
+    }, 0);
 
     const statistics = {
       totalBookings,
@@ -445,7 +478,7 @@ const getBookingStatistics = async (req, res) => {
         completed: completedBookings,
         cancelled: cancelledBookings,
       },
-      totalRevenue: totalRevenue[0]?.total || 0,
+      totalRevenue: totalRevenue,
     };
 
     res.status(200).json({

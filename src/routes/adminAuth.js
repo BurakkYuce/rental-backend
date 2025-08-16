@@ -457,7 +457,7 @@ router.post('/cars', adminAuth, async (req, res) => {
         daily: Math.max(parseFloat(req.body.pricing?.daily || req.body.dailyRate || req.body.daily) || 100, 1),
         weekly: Math.max(parseFloat(req.body.pricing?.weekly || req.body.weeklyRate) || 0, 0),
         monthly: Math.max(parseFloat(req.body.pricing?.monthly || req.body.monthlyRate) || 0, 0),
-        currency: req.body.pricing?.currency || req.body.currency || 'TRY'
+        currency: req.body.pricing?.currency || req.body.currency || 'EUR'
       },
       status: (req.body.status === 'active' || req.body.status === true) ? 'active' : 'inactive',
       featured: req.body.featured || false,

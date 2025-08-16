@@ -209,12 +209,64 @@ const Car = sequelize.define(
         daily: 0,
         weekly: 0,
         monthly: 0,
-        currency: "TRY",
+        currency: "EUR",
       },
       validate: {
         isValidPricing(value) {
           if (!value || !value.daily || value.daily <= 0) {
             throw new Error("Daily price is required and must be positive");
+          }
+        },
+      },
+    },
+
+    // Seasonal/Scheduled Pricing (Optional) - Array of seasonal pricing objects
+    seasonalPricing: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: [],
+      validate: {
+        isValidSeasonalPricing(value) {
+          if (value && Array.isArray(value)) {
+            for (const season of value) {
+              if (season && typeof season === "object") {
+                if (!season.startDate || !season.endDate) {
+                  throw new Error("Seasonal pricing must have startDate and endDate");
+                }
+                if (!season.daily && !season.weekly && !season.monthly) {
+                  throw new Error("Seasonal pricing must have at least one price");
+                }
+                
+                // Helper function to parse Turkish DD/MM/YYYY format
+                const parseTurkishDate = (dateString) => {
+                  if (!dateString) return null;
+                  
+                  // Handle DD/MM/YYYY format
+                  if (dateString.includes('/')) {
+                    const [day, month, year] = dateString.split('/');
+                    return new Date(year, month - 1, day);
+                  }
+                  // Handle YYYY-MM-DD format
+                  else if (dateString.includes('-')) {
+                    const [year, month, day] = dateString.split('-');
+                    return new Date(year, month - 1, day);
+                  }
+                  
+                  return new Date(dateString);
+                };
+                
+                // Validate date format using Turkish-aware parser
+                const startDate = parseTurkishDate(season.startDate);
+                const endDate = parseTurkishDate(season.endDate);
+                
+                if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                  throw new Error("Invalid date format in seasonal pricing. Use DD/MM/YYYY format.");
+                }
+                if (startDate >= endDate) {
+                  throw new Error("End date must be after start date in seasonal pricing");
+                }
+              }
+            }
           }
         },
       },
@@ -262,6 +314,7 @@ const Car = sequelize.define(
       { fields: ["category"] },
       { fields: ["slug"] },
       { fields: ['"pricing"'], using: "gin" }, // JSONB index
+      { fields: ['"seasonalPricing"'], using: "gin" }, // JSONB index
       { fields: ['"mainImage"'], using: "gin" }, // JSONB index
       { fields: ['"gallery"'], using: "gin" }, // JSONB index
     ],

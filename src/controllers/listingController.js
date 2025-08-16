@@ -1,5 +1,5 @@
 // src/controllers/listingController.js - Listing CRUD Operations
-const { Car: Listing, Admin } = require('../models');
+const { Car: Listing, Admin, Booking } = require('../models');
 const { uploadImage, uploadMultipleImages, deleteImage } = require('../config/cloudinary');
 const { Op } = require('sequelize');
 
@@ -148,6 +148,7 @@ const createListing = async (req, res) => {
 
 // Get all listings with filters
 const getListings = async (req, res) => {
+  console.log('🚀 getListings called!');
   try {
     const {
       page = 1,
@@ -165,8 +166,12 @@ const getListings = async (req, res) => {
       status = 'active',
       sortBy = 'created_at',
       sortOrder = 'DESC',
-      search
+      search,
+      pickupDate,
+      dropoffDate
     } = req.query;
+    
+    console.log('📊 Query params:', { pickupDate, dropoffDate });
 
     // Build where clause
     const where = { status };
@@ -207,19 +212,80 @@ const getListings = async (req, res) => {
       order = [['pricing', sortOrder.toUpperCase()]];
     }
 
-    // Use raw query as fallback for testing
+    // Get cars that are NOT available for the requested date range
+    let activeBookedCarIds = [];
+    
+    if (pickupDate && dropoffDate) {
+      // User specified date range - check for conflicts
+      const requestedPickup = new Date(pickupDate);
+      const requestedDropoff = new Date(dropoffDate);
+      
+      console.log(`🗓️ Checking availability for: ${requestedPickup.toISOString()} to ${requestedDropoff.toISOString()}`);
+      
+      activeBookedCarIds = await Booking.findAll({
+        attributes: ['carId'],
+        where: {
+          status: ['pending', 'confirmed', 'active'],
+          [Op.and]: [
+            // Booking overlaps with requested dates
+            {
+              [Op.or]: [
+                // Booking starts before our period and ends during our period
+                {
+                  pickupTime: { [Op.lte]: requestedPickup },
+                  dropoffTime: { [Op.gt]: requestedPickup }
+                },
+                // Booking starts during our period
+                {
+                  pickupTime: { [Op.gte]: requestedPickup, [Op.lt]: requestedDropoff }
+                },
+                // Booking completely contains our period
+                {
+                  pickupTime: { [Op.lte]: requestedPickup },
+                  dropoffTime: { [Op.gte]: requestedDropoff }
+                }
+              ]
+            }
+          ]
+        },
+        raw: true
+      }).then(bookings => bookings.map(b => b.carId));
+      
+    } else {
+      // No date range specified - just exclude currently active bookings
+      const now = new Date();
+      activeBookedCarIds = await Booking.findAll({
+        attributes: ['carId'],
+        where: {
+          status: ['pending', 'confirmed', 'active'],
+          dropoffTime: { [Op.gt]: now } // Booking hasn't ended yet
+        },
+        raw: true
+      }).then(bookings => bookings.map(b => b.carId));
+    }
+    
+    console.log('🚗 Unavailable car IDs:', activeBookedCarIds);
+
+    // Build availability filter - exclude actively booked cars
+    let availabilityFilter = '';
+    if (activeBookedCarIds.length > 0) {
+      const carIdPlaceholders = activeBookedCarIds.map(() => '?').join(',');
+      availabilityFilter = ` AND id NOT IN (${carIdPlaceholders})`;
+    }
+
+    // Use raw query with availability filter
     const listings = await Listing.sequelize.query(
-      'SELECT * FROM cars WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      `SELECT * FROM cars WHERE status = ?${availabilityFilter} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
       {
-        replacements: [status, parseInt(limit), offset],
+        replacements: [status, ...activeBookedCarIds, parseInt(limit), offset],
         type: Listing.sequelize.QueryTypes.SELECT
       }
     );
     
     const countResult = await Listing.sequelize.query(
-      'SELECT COUNT(*) as count FROM cars WHERE status = ?',
+      `SELECT COUNT(*) as count FROM cars WHERE status = ?${availabilityFilter}`,
       {
-        replacements: [status],
+        replacements: [status, ...activeBookedCarIds],
         type: Listing.sequelize.QueryTypes.SELECT
       }
     );
@@ -231,10 +297,21 @@ const getListings = async (req, res) => {
     const hasNextPage = parseInt(page) < totalPages;
     const hasPrevPage = parseInt(page) > 1;
 
+    // Apply seasonal pricing to each listing
+    const listingsWithSeasonalPricing = listings.map(listing => {
+      const effectivePricing = getEffectivePricing(listing);
+      
+      return {
+        ...listing,
+        effectivePricing,
+        basePricing: listing.pricing
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        listings,
+        listings: listingsWithSeasonalPricing,
         pagination: {
           currentPage: parseInt(page),
           totalPages,
@@ -256,10 +333,59 @@ const getListings = async (req, res) => {
   }
 };
 
+// Simple function to check if today falls within seasonal pricing
+const getEffectivePricing = (listing) => {
+  // Ensure currency is always EUR for base pricing
+  const basePricing = {
+    ...listing.pricing,
+    currency: listing.pricing.currency === 'TRY' ? 'EUR' : listing.pricing.currency
+  };
+  
+  if (!listing.seasonalPricing || listing.seasonalPricing.length === 0) {
+    return basePricing;
+  }
+  
+  const today = new Date();
+  
+  for (const season of listing.seasonalPricing) {
+    if (!season.startDate || !season.endDate) continue;
+    
+    // Parse Turkish date format DD/MM/YYYY
+    const [startDay, startMonth, startYear] = season.startDate.split('/');
+    const [endDay, endMonth, endYear] = season.endDate.split('/');
+    
+    const startDate = new Date(startYear, startMonth - 1, startDay);
+    const endDate = new Date(endYear, endMonth - 1, endDay);
+    
+    console.log(`📅 Checking seasonal pricing "${season.name}":`, {
+      today: today.toDateString(),
+      startDate: startDate.toDateString(), 
+      endDate: endDate.toDateString(),
+      isInRange: today >= startDate && today <= endDate
+    });
+    
+    if (today >= startDate && today <= endDate) {
+      console.log(`🎯 Using seasonal pricing: ${season.name}`);
+      return {
+        daily: parseFloat(season.daily) || basePricing.daily,
+        weekly: parseFloat(season.weekly) || basePricing.weekly,
+        monthly: parseFloat(season.monthly) || basePricing.monthly,
+        currency: basePricing.currency, // Use EUR currency
+        seasonalName: season.name,
+        seasonalPeriod: `${season.startDate} - ${season.endDate}`
+      };
+    }
+  }
+  
+  console.log('📅 Using base pricing');
+  return basePricing;
+};
+
 // Get single listing by ID or slug
 const getListing = async (req, res) => {
   try {
     const { id } = req.params;
+    const { date } = req.query; // Optional date parameter for seasonal pricing
     
     // Check if id is UUID or slug
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
@@ -267,12 +393,7 @@ const getListing = async (req, res) => {
     const where = isUUID ? { id } : { slug: id };
 
     const listing = await Listing.findOne({
-      where,
-      include: [{
-        model: Admin,
-        as: 'owner',
-        attributes: ['id', 'firstName', 'lastName', 'email', 'phone']
-      }]
+      where
     });
 
     if (!listing) {
@@ -290,9 +411,21 @@ const getListing = async (req, res) => {
       stats: currentStats 
     });
 
+    // Calculate effective pricing (base + seasonal)
+    const listingData = listing.toJSON();
+    const effectivePricing = getEffectivePricing(listingData);
+    
+    // Add effective pricing to response
+    const responseData = {
+      ...listingData,
+      effectivePricing,
+      // Keep original pricing for reference
+      basePricing: listingData.pricing
+    };
+
     res.json({
       success: true,
-      data: listing
+      data: responseData
     });
 
   } catch (error) {
