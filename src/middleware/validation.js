@@ -342,6 +342,131 @@ const loginValidationRules = () => [
   body("password").notEmpty().withMessage("Password is required"),
 ];
 
+// ===== BOOKING VALIDATIONS =====
+
+const bookingValidationRules = () => [
+  body("serviceType")
+    .notEmpty()
+    .isIn(["car_rental", "transfer"])
+    .withMessage("Service type must be car_rental or transfer"),
+
+  body("carId")
+    .if(body("serviceType").equals("car_rental"))
+    .notEmpty()
+    .isUUID()
+    .withMessage("Car ID is required for car rental and must be valid UUID"),
+
+  body("transferId")
+    .if(body("serviceType").equals("transfer"))
+    .notEmpty()
+    .isUUID()
+    .withMessage("Transfer ID is required for transfer service and must be valid UUID"),
+
+  body("drivers")
+    .isArray({ min: 1 })
+    .withMessage("At least one driver is required"),
+
+  body("drivers.*.name")
+    .notEmpty()
+    .trim()
+    .isLength({ min: 2, max: 100 })
+    .matches(/^[a-zA-ZÀ-ÿ\s]+$/)
+    .withMessage("Driver name must be 2-100 characters and contain only letters"),
+
+  body("drivers.*.email")
+    .isEmail()
+    .normalizeEmail()
+    .withMessage("Driver email must be valid"),
+
+  body("drivers.*.phone")
+    .optional()
+    .isMobilePhone()
+    .withMessage("Driver phone must be valid"),
+
+  body("drivers.*.age")
+    .isInt({ min: 18, max: 100 })
+    .withMessage("Driver age must be between 18 and 100"),
+
+  body("pickupLocation")
+    .notEmpty()
+    .trim()
+    .isLength({ min: 5, max: 200 })
+    .withMessage("Pickup location is required and must be 5-200 characters"),
+
+  body("dropoffLocation")
+    .notEmpty()
+    .trim()
+    .isLength({ min: 5, max: 200 })
+    .withMessage("Dropoff location is required and must be 5-200 characters"),
+
+  body("pickupTime")
+    .isISO8601()
+    .custom((value) => {
+      const pickupDate = new Date(value);
+      const now = new Date();
+      if (pickupDate <= now) {
+        throw new Error("Pickup time must be in the future");
+      }
+      return true;
+    })
+    .withMessage("Pickup time must be a valid future date"),
+
+  body("dropoffTime")
+    .isISO8601()
+    .custom((value, { req }) => {
+      const dropoffDate = new Date(value);
+      const pickupDate = new Date(req.body.pickupTime);
+      if (dropoffDate <= pickupDate) {
+        throw new Error("Dropoff time must be after pickup time");
+      }
+      return true;
+    })
+    .withMessage("Dropoff time must be a valid date after pickup time"),
+
+  body("specialRequests")
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage("Special requests must be less than 1000 characters"),
+
+  body("transferData.vehicleCapacity")
+    .if(body("serviceType").equals("transfer"))
+    .notEmpty()
+    .isIn(["capacity_1_4", "capacity_5_8", "capacity_9_16"])
+    .withMessage("Vehicle capacity is required for transfer service"),
+
+  body("transferData.passengers")
+    .if(body("serviceType").equals("transfer"))
+    .isInt({ min: 1, max: 16 })
+    .withMessage("Number of passengers must be between 1 and 16"),
+
+  body("transferData.flightNumber")
+    .if(body("serviceType").equals("transfer"))
+    .optional()
+    .trim()
+    .isLength({ max: 20 })
+    .withMessage("Flight number must be less than 20 characters"),
+];
+
+const bookingUpdateValidationRules = () => [
+  body("status")
+    .optional()
+    .isIn(["pending", "confirmed", "active", "completed", "cancelled"])
+    .withMessage("Status must be valid"),
+
+  body("adminNotes")
+    .optional()
+    .trim()
+    .isLength({ max: 2000 })
+    .withMessage("Admin notes must be less than 2000 characters"),
+
+  body("specialRequests")
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage("Special requests must be less than 1000 characters"),
+];
+
 // ===== MESSAGE VALIDATIONS =====
 
 const messageValidationRules = () => [
@@ -536,6 +661,10 @@ module.exports = {
   validateBlog: [...blogValidationRules(), handleValidationErrors],
   validateBlogUpdate: [...blogUpdateValidationRules(), handleValidationErrors],
 
+  // Booking validations
+  validateBooking: [...bookingValidationRules(), handleValidationErrors],
+  validateBookingUpdate: [...bookingUpdateValidationRules(), handleValidationErrors],
+
   // Location validations
   validateLocation: [...locationValidationRules(), handleValidationErrors],
 
@@ -563,6 +692,8 @@ module.exports = {
     carUpdate: carUpdateValidationRules,
     blog: blogValidationRules,
     blogUpdate: blogUpdateValidationRules,
+    booking: bookingValidationRules,
+    bookingUpdate: bookingUpdateValidationRules,
     location: locationValidationRules,
     admin: adminValidationRules,
     login: loginValidationRules,

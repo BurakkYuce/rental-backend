@@ -369,7 +369,8 @@ const Car = sequelize.define(
   }
 );
 
-  // Instance methods
+// Instance methods - only add if Car prototype exists (not in test environment)
+if (Car && Car.prototype) {
   Car.prototype.getMainImageUrl = function () {
     return this.mainImage?.url || null;
   };
@@ -392,5 +393,6 @@ const Car = sequelize.define(
   Car.prototype.getFullName = function () {
     return `${this.brand} ${this.model} (${this.year})`;
   };
+}
 
   module.exports = Car;

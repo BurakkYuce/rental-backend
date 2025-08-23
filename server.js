@@ -18,6 +18,7 @@ const adminRoutes = require("./src/routes/admin");
 const blogRoutes = require("./src/routes/blog");
 const carRoutes = require("./src/routes/cars");
 const transferRoutes = require("./src/routes/transfers");
+const bookingRoutes = require("./src/routes/bookings");
 
 // Minimal compatibility routes for frontend
 const minimalCompatRoutes = require("./src/routes/minimal-compat");
@@ -25,7 +26,21 @@ const minimalCompatRoutes = require("./src/routes/minimal-compat");
 // Express app oluştur
 const app = express();
 
-// Middleware
+// Apply security headers first
+const { securityHeaders, requestSizeLimit, pathTraversalProtection, userAgentValidation, rateLimits, sanitizeInput, sqlInjectionProtection, jsonErrorHandler } = require("./src/middleware/security");
+app.use(securityHeaders);
+app.use(requestSizeLimit);
+app.use(pathTraversalProtection);
+
+// User agent validation (only in production)
+if (process.env.NODE_ENV === 'production') {
+  app.use(userAgentValidation);
+}
+
+// General rate limiting
+app.use(rateLimits.general);
+
+// CORS middleware (after security headers)
 app.use(
   cors({
     origin: [
@@ -36,8 +51,16 @@ app.use(
   })
 );
 
+// Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Add JSON error handler after body parser
+app.use(jsonErrorHandler);
+
+// Apply input security middleware after body parsing
+app.use(sqlInjectionProtection);
+app.use(sanitizeInput);
 
 // Request/Response logging middleware
 app.use((req, res, next) => {
@@ -92,11 +115,18 @@ app.use(
   })
 );
 
+// Apply specific rate limiting for different endpoint types
+app.use("/api/auth", rateLimits.auth); // Strict rate limiting for auth
+app.use("/api/admin", rateLimits.admin); // Moderate rate limiting for admin
+app.use("/api/images", rateLimits.upload); // Strict rate limiting for uploads
+app.use("/api/bookings", rateLimits.booking); // Strict rate limiting for bookings
+
 // API Routes - PostgreSQL routes
 app.use("/api/listings", listingRoutes);
 app.use("/api/images", imageUploadRoutes);
 app.use("/api/cars", carRoutes);
 app.use("/api/transfers", transferRoutes);
+app.use("/api/bookings", bookingRoutes);
 app.use("/api/auth", adminAuthRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", blogRoutes);

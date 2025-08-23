@@ -2,7 +2,7 @@
 const express = require("express");
 const router = express.Router();
 const { body, query } = require("express-validator");
-const { protect } = require("../middleware/auth");
+const { adminAuth: protect } = require("../middleware/auth");
 
 // Import booking functions from bookingController
 const {
@@ -28,7 +28,7 @@ router.post(
   [
     body("carId")
       .notEmpty()
-      .isMongoId()
+      .isUUID()
       .withMessage("Valid car ID is required"),
     body("pickupLocation")
       .notEmpty()

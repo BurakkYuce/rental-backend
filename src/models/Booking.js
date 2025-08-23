@@ -147,16 +147,19 @@ const Booking = sequelize.define(
   }
 );
 
-// Instance methods
-Booking.prototype.canBeModified = function() {
-  const modifiableStatuses = ['pending', 'confirmed'];
-  const now = new Date();
-  return modifiableStatuses.includes(this.status) && 
-         new Date(this.pickupTime) > now;
-};
+// Instance methods - only add if Booking prototype exists (not in test environment)
+if (Booking && Booking.prototype) {
+  Booking.prototype.canBeModified = function() {
+    const modifiableStatuses = ['pending', 'confirmed'];
+    const now = new Date();
+    return modifiableStatuses.includes(this.status) && 
+           new Date(this.pickupTime) > now;
+  };
+}
 
-// Static methods for filtering
-Booking.getBookingsWithFilters = async function(filters) {
+// Static methods for filtering - only add if Booking exists (not in test environment)
+if (Booking && typeof Booking === 'function') {
+  Booking.getBookingsWithFilters = async function(filters) {
   const {
     page = 1,
     limit = 20,
@@ -221,5 +224,6 @@ Booking.getBookingsWithFilters = async function(filters) {
     },
   };
 };
+}
 
 module.exports = Booking;
