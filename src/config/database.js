@@ -34,10 +34,11 @@ const connectDB = async () => {
     console.log(`🏠 Host: ${process.env.DATABASE_HOST}:${process.env.DATABASE_PORT}`);
     
     // Sync database tables (be careful in production)
-    if (process.env.NODE_ENV === 'development') {
-      await sequelize.sync({ alter: true });
-      console.log('🔄 Database tables synchronized');
-    }
+    // Temporarily disabled due to model sync issues
+    // if (process.env.NODE_ENV === 'development') {
+    //   await sequelize.sync({ force: true });
+    //   console.log('🔄 Database tables synchronized with force');
+    // }
     
   } catch (error) {
     console.error('❌ PostgreSQL connection failed:', error);

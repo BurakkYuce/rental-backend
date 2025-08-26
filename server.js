@@ -27,13 +27,22 @@ const minimalCompatRoutes = require("./src/routes/minimal-compat");
 const app = express();
 
 // Apply security headers first
-const { securityHeaders, requestSizeLimit, pathTraversalProtection, userAgentValidation, rateLimits, sanitizeInput, sqlInjectionProtection, jsonErrorHandler } = require("./src/middleware/security");
+const {
+  securityHeaders,
+  requestSizeLimit,
+  pathTraversalProtection,
+  userAgentValidation,
+  rateLimits,
+  sanitizeInput,
+  sqlInjectionProtection,
+  jsonErrorHandler,
+} = require("./src/middleware/security");
 app.use(securityHeaders);
 app.use(requestSizeLimit);
 app.use(pathTraversalProtection);
 
 // User agent validation (only in production)
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === "production") {
   app.use(userAgentValidation);
 }
 
